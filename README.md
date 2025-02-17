@@ -1,15 +1,27 @@
 # CNC Sinumerik Editor
 
-Web-based editor for CNC Sinumerik programs with built-in parsing functionality.
+Webová aplikace pro editaci a simulaci CNC Sinumerik programů.
 
-## Features
+## Funkce
 
-- Split-pane interface for editing and parsing
-- Touch-friendly design
-- Support for .mpf and .spf files
-- Responsive layout
-- Program selection panel
+- Split-pane rozhraní pro editaci a parsování
+- Dotykově přívětivý design
+- Podpora souborů .mpf a .spf
+- Responsivní layout
+- Panel pro výběr programů
+- Simulátor CNC programů (ve vývoji)
 
-## Usage
+## Použití
 
-Open `editor_cnc.html` in a modern web browser. Use the file selector to load CNC programs.
+Otevřete `editor_cnc.html` v moderním webovém prohlížeči. Použijte výběr souborů pro načtení CNC programů.
+
+## Aktuální stav
+
+- Editor: Základní funkce implementovány
+- Simulátor: Ve vývoji
+
+## Plánované funkce
+
+- Parser CNC kódu
+- Simulace drah nástroje
+- Podpora MPF a SPF souborů
