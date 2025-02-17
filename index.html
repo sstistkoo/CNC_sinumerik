@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNC Simulator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div id="horni-panel">
+            <div class="tab-buttons">
+                <button class="menu-button" onclick="toggleMenu('left')">📂</button>
+                <button onclick="switchTab('parser')" class="tab-button active" id="parserTab">Parser</button>
+                <button onclick="switchTab('simulator')" class="tab-button" id="simulatorTab">Simulace</button>
+                <button class="menu-button" onclick="toggleMenu('right')">📋</button>
+            </div>
+            <div id="parserContent">
+                <textarea id="parserOutput" readonly></textarea>
+            </div>
+            <div id="simulatorContent">
+                <canvas id="simulatorCanvas"></canvas>
+            </div>
+        </div>
+
+        <div id="separator">
+            <div class="separator-content">
+                <div class="player-container">
+                    <div class="player-buttons">
+                        <button class="player-button" title="Krok zpět">⏪</button>
+                        <button class="player-button" title="Spustit/Pozastavit">⏯️</button>
+                        <button class="player-button" title="Krok vpřed">⏩</button>
+                    </div>
+                </div>
+            </div>
+            <div class="resize-handle" title="Změnit velikost"></div>
+        </div>
+
+        <div id="dolni-panel">
+            <div id="editor">
+                <textarea id="codeEditor" spellcheck="false"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Menu panely - opravené duplicity -->
+    <div id="leftMenu" class="side-menu">
+        <button class="close-btn" onclick="toggleMenu('left')">✖</button>
+        <button onclick="openFileMenu()">Otevřít Program</button>
+    </div>
+
+    <div id="rightMenu" class="side-menu">
+        <button class="close-btn" onclick="toggleMenu('right')">✖</button>
+        <div id="programList"></div>
+    </div>
+
+    <!-- Ovládací tlačítka - opravené duplicity -->
+    <div class="controls">
+        <button onclick="toggleMenu('left')">📂</button>
+        <button onclick="toggleMenu('right')">📋</button>
+    </div>
+
+    <script>
+        // Vložíme kód ze simulator.js
+        class Simulator {
+            constructor() {
+                this.canvas = document.getElementById('simulatorCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.scale = 1;
+                this.offsetX = 0;
+                this.offsetY = 0;
+                this.toolPath = [];
+                this.setupCanvas();
+            }
+
+            setupCanvas() {
+                if (!this.canvas) return;
+
+                const mmToPx = 3.78;
+                const marginX = 5 * mmToPx;
+                const marginY = 5 * mmToPx;
+
+                this.canvas.width = this.canvas.offsetWidth;
+                this.canvas.height = this.canvas.offsetHeight;
+                this.offsetX = marginX;
+                this.offsetY = this.canvas.height - marginY * 4;
+
+                this.draw();
+            }
+
+            draw() {
+                if (!this.ctx) return;
+
+                this.ctx.save();
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                this.ctx.translate(this.offsetX, this.offsetY);
+                this.ctx.scale(this.scale, -this.scale);
+
+                this.drawGrid();
+                this.drawAxes();
+                this.drawToolPath();
+
+                this.ctx.restore();
+            }
+
+            drawGrid() {
+                // Implementace vykreslení mřížky
+                const size = Math.max(this.canvas.width, this.canvas.height) / this.scale;
+                const gridSize = 50;
+                const numSquares = Math.ceil(size / gridSize);
+
+                this.ctx.strokeStyle = '#ddd';
+                this.ctx.lineWidth = 0.5 / this.scale;
+
+                for (let i = -numSquares; i <= numSquares; i++) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(i * gridSize, -size);
+                    this.ctx.lineTo(i * gridSize, size);
+                    this.ctx.stroke();
+
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(-size, i * gridSize);
+                    this.ctx.lineTo(size, i * gridSize);
+                    this.ctx.stroke();
+                }
+            }
+
+            drawAxes() {
+                const size = Math.max(this.canvas.width, this.canvas.height) / this.scale;
+                this.ctx.strokeStyle = '#000';
+                this.ctx.lineWidth = 2 / this.scale;
+
+                this.ctx.beginPath();
+                this.ctx.moveTo(-size, 0);
+                this.ctx.lineTo(size, 0);
+                this.ctx.stroke();
+
+                this.ctx.beginPath();
+                this.ctx.moveTo(0, -size);
+                this.ctx.lineTo(0, size);
+                this.ctx.stroke();
+            }
+
+            drawToolPath() {
+                if (!this.toolPath.length) return;
+
+                this.ctx.strokeStyle = 'blue';
+                this.ctx.lineWidth = 2 / this.scale;
+                this.ctx.beginPath();
+
+                this.toolPath.forEach(([x, z], i) => {
+                    if (i === 0) {
+                        this.ctx.moveTo(z, -x);
+                    } else {
+                        this.ctx.lineTo(z, -x);
+                    }
+                });
+
+                this.ctx.stroke();
+            }
+
+            updateToolPath(path) {
+                this.toolPath = path || [];
+                this.draw();
+            }
+        }
+
+        // Nahradíme prázdnou třídu Parser kompletní implementací
+        class Parser {
+            constructor() {
+                this.toolPath = [];
+                this.output = document.getElementById('parserOutput');
+                this.setupParserEvents();
+            }
+
+            parse(code) {
+                if (!code || code.trim() === '') {
+                    if (this.output) this.output.value = "1: \n2: ";
+                    this.toolPath = [[0, 0]];
+                    return;
+                }
+
+                const lines = code.split('\n');
+                let currentX = 0;
+                let currentZ = 0;
+                this.toolPath = [[currentX, currentZ]];
+
+                const parsedLines = lines.map((line, index) => {
+                    let parsed = `${index + 1}: `;
+                    const parts = line.trim().toUpperCase().split(' ');
+
+                    let newX = currentX;
+                    let newZ = currentZ;
+
+                    for (const part of parts) {
+                        if (part.startsWith('G')) {
+                            parsed += '[G-kód] ';
+                        } else if (part.startsWith('M')) {
+                            parsed += '[M-kód] ';
+                        } else if (part.startsWith('X')) {
+                            newX = parseFloat(part.slice(1)) || currentX;
+                        } else if (part.startsWith('Z')) {
+                            newZ = parseFloat(part.slice(1)) || currentZ;
+                        }
+                    }
+
+                    if (newX !== currentX || newZ !== currentZ) {
+                        this.toolPath.push([newX, newZ]);
+                        currentX = newX;
+                        currentZ = newZ;
+                    }
+
+                    parsed += line;
+                    return parsed;
+                });
+
+                if (this.output) {
+                    this.output.value = parsedLines.join('\n');
+                }
+            }
+
+            setupParserEvents() {
+                this.output.addEventListener('click', (e) => {
+                    const text = this.output.value;
+                    const pos = this.output.selectionStart;
+                    const lines = text.substr(0, pos).split('\n');
+                    const lineNumber = lines.length;
+                    this.selectLine(lineNumber);
+                });
+            }
+
+            selectLine(lineNumber) {
+                const lines = this.output.value.split('\n');
+                if (lineNumber < 1 || lineNumber > lines.length) return;
+
+                // Najdeme pozici začátku a konce řádku
+                let start = 0;
+                for (let i = 0; i < lineNumber - 1; i++) {
+                    start += lines[i].length + 1;
+                }
+                const end = start + lines[lineNumber - 1].length;
+
+                // Označíme řádek
+                this.output.focus();
+                this.output.setSelectionRange(start, end);
+
+                // Odešleme událost o změně vybraného řádku
+                if (this.onLineSelected) {
+                    this.onLineSelected(lineNumber);
+                }
+            }
+        }
+
+        // Vložíme kód z editor.js
+        class Editor {
+            constructor() {
+                this.editor = document.getElementById('codeEditor');
+                this.selectedLine = 1;
+                this.setupEditor();
+            }
+
+            setupEditor() {
+                // Inicializace editoru
+                this.editor.value = "1: \n2: ";
+
+                // Přidání event listenerů
+                this.editor.addEventListener('input', (e) => {
+                    const text = this.editor.value;
+                    const cursorPos = this.editor.selectionStart;
+                    const lines = text.split('\n').map(line =>
+                        line.replace(/^\d+:\s*|\[G-kód\]\s*|\[M-kód\]\s*/g, ''));
+                    const formattedLines = lines.map((line, i) => this.formatLine(line, i));
+
+                    this.editor.value = formattedLines.join('\n');
+                    this.editor.selectionStart = this.editor.selectionEnd = cursorPos;
+
+                    if (this.onCodeChange) {
+                        this.onCodeChange(lines.join('\n'));
+                    }
+                });
+
+                this.editor.addEventListener('click', (e) => {
+                    const text = this.editor.value;
+                    const pos = this.editor.selectionStart;
+                    const lines = text.substr(0, pos).split('\n');
+                    const lineNumber = lines.length;
+                    this.selectLine(lineNumber);
+                });
+            }
+
+            selectLine(lineNumber) {
+                const lines = this.editor.value.split('\n');
+                if (lineNumber < 1 || lineNumber > lines.length) return;
+
+                let start = 0;
+                for (let i = 0; i < lineNumber - 1; i++) {
+                    start += lines[i].length + 1;
+                }
+                const end = start + lines[lineNumber - 1].length;
+
+                this.editor.focus();
+                this.editor.setSelectionRange(start, end);
+                this.selectedLine = lineNumber;
+
+                if (this.onLineSelected) {
+                    this.onLineSelected(lineNumber);
+                }
+            }
+
+            formatLine(line, index) {
+                // Přidáme stejnou logiku jako v parseru pro rozpoznávání kódů
+                const lineNumber = index + 1;
+                const prefix = lineNumber < 10 ? ' ' : '';
+                let parsed = `${prefix}${lineNumber}: `;
+
+                // Rozpoznávání kódů stejně jako v parseru
+                const parts = line.trim().toUpperCase().split(' ');
+                let hasGCode = false;
+                let hasMCode = false;
+
+                for (const part of parts) {
+                    if (part.startsWith('G')) hasGCode = true;
+                    if (part.startsWith('M') || part.startsWith('MSG')) hasMCode = true;
+                }
+
+                // Přidáme značky kódů
+                if (hasGCode) parsed += '[G-kód] ';
+                if (hasMCode) parsed += '[M-kód] ';
+
+                return parsed + line;
+            }
+
+            loadProgram(program) {
+                if (!program) return;
+
+                const lines = program.split('\n');
+                const formattedLines = lines.map((line, i) => this.formatLine(line, i));
+                this.editor.value = formattedLines.join('\n');
+            }
+        }
+
+        class App {
+            constructor() {
+                this.simulator = new Simulator();
+                this.parser = new Parser();
+                this.setupEditor();
+                this.setupCommunication();
+                this.setupEventListeners();
+                this.initializePanels();
+
+                // Přidáme globální reference na metody
+                window.toggleMenu = this.toggleMenu.bind(this);
+                window.switchTab = this.switchTab.bind(this);
+                window.openFileMenu = this.openFileMenu.bind(this);ditor(); // Přidáme instanci Editor třídy
+
+                // Nastavíme výchozí záložku na parser
+                this.switchTab('parser');
+
+                // Přidáme propojení mezi editorem a parserem
+                this.editor.onLineSelected = (lineNumber) => {
+                    this.parser.selectLine(lineNumber);
+                };
+
+                this.parser.onLineSelected = (lineNumber) => {
+                    this.editor.selectLine(lineNumber);
+                };            }
+            }
+
+            initializePanels() {
+                const horniPanel = document.getElementById('horni-panel');is.editor.onCodeChange = (code) => {
+                if (horniPanel) {                    this.parser.parse(code);
+                    // Nastavíme výchozí výšku horního panelu na polovinu dostupné výškytoolPath);
+                    const dostupnaVyska = window.innerHeight;
+                    const separatorVyska = 60;
+                    const vyskaHorniho = Math.floor((dostupnaVyska - separatorVyska) / 2);   // Propojení synchronizace řádků
+                    horniPanel.style.height = `${vyskaHorniho}px`;                this.editor.onLineSelected = (lineNumber) => {
+                }selectLine(lineNumber);
+            }
+
+            // Přidáme metody pro přepínání menu
+            toggleMenu(side) {
+                const menu = document.getElementById(`${side}Menu`);
+                const otherSide = side === 'left' ? 'right' : 'left';
+                const otherMenu = document.getElementById(`${otherSide}Menu`);
+alizePanels() {
+                if (menu) {   const horniPanel = document.getElementById('horni-panel');
+                    menu.classList.toggle('visible');                if (horniPanel) {
+                    if (otherMenu && otherMenu.classList.contains('visible')) {orního panelu na polovinu dostupné výšky
+                        otherMenu.classList.remove('visible');upnaVyska = window.innerHeight;
+                    }
+                }separatorVyska) / 2);
+            }
+                }
+            // Přidáme metodu pro přepínání záložek
+            switchTab(tab) {
+                const parserContent = document.getElementById('parserContent');
+                const simulatorContent = document.getElementById('simulatorContent');
+                const parserTab = document.getElementById('parserTab'); menu = document.getElementById(`${side}Menu`);
+                const simulatorTab = document.getElementById('simulatorTab');onst otherSide = side === 'left' ? 'right' : 'left';
+   const otherMenu = document.getElementById(`${otherSide}Menu`);
+                if (tab === 'parser') {
+                    parserContent.style.display = 'block';
+                    simulatorContent.style.display = 'none';ssList.toggle('visible');
+                    parserTab.classList.add('active');
+                    simulatorTab.classList.remove('active');
+                } else {
+                    parserContent.style.display = 'none';
+                    simulatorContent.style.display = 'block';            }
+                    parserTab.classList.remove('active');
+                    simulatorTab.classList.add('active');
+                    this.simulator.setupCanvas(); // Aktualizujeme canvas při přepnutí
+                }entById('parserContent');
+            }ById('simulatorContent');
+rserTab = document.getElementById('parserTab');
+            setupEditor() {yId('simulatorTab');
+                this.editor = document.getElementById('codeEditor');
+                if (!this.editor) {
+                    console.error('Editor element not found');;
+                    return;
+                }   parserTab.classList.add('active');
+       simulatorTab.classList.remove('active');
+                this.editor.addEventListener('input', (e) => {                } else {
+                    const code = e.target.value;ontent.style.display = 'none';
+                    this.parser.parse(code);
+                    this.simulator.updateToolPath(this.parser.toolPath);List.remove('active');
+                });
+            }mulator.setupCanvas(); // Aktualizujeme canvas při přepnutí
+
+            setupCommunication() {            }
+                window.addEventListener('message', (event) => {
+                    if (event.data.action === 'codeChanged') {
+                        this.parser.parse(event.data.code);t.querySelector('.resize-handle');
+                        this.simulator.updateToolPath(this.parser.toolPath););
+                    }st dolniPanel = document.getElementById('dolni-panel');
+                });   let isResizing = false;
+            }
+entListener('mousedown', (e) => {
+            setupEventListeners() {
+                const resizeHandle = document.querySelector('.resize-handle');
+                const horniPanel = document.getElementById('horni-panel');
+                const dolniPanel = document.getElementById('dolni-panel');
+                let isResizing = false;
+ const startY = e.pageY;
+                resizeHandle.addEventListener('mousedown', (e) => {       const startHeight = horniPanel.offsetHeight;
+                    if (e.button !== 0) return;
+                    e.preventDefault();(e) => {
+                    e.stopPropagation();
+                    isResizing = true;nerHeight - 260,
+
+                    const startY = e.pageY;e.height = `${newHeight}px`;
+                    const startHeight = horniPanel.offsetHeight;                        this.simulator.setupCanvas(); // Změněno z handleResize na setupCanvas
+
+                    const onMove = (e) => {
+                        if (!isResizing) return;{
+                        const newHeight = Math.max(100, Math.min(window.innerHeight - 260,se;
+                            startHeight + e.pageY - startY));eEventListener('mousemove', onMove);
+                        horniPanel.style.height = `${newHeight}px`;                        document.removeEventListener('mouseup', onUp);
+                        this.simulator.setupCanvas(); // Změněno z handleResize na setupCanvas
+                    };
+                    document.addEventListener('mousemove', onMove);
+                    const onUp = () => {er('mouseup', onUp);
+                        isResizing = false;
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                    };
+
+                    document.addEventListener('mousemove', onMove);fileInput = document.createElement('input');
+                    document.addEventListener('mouseup', onUp);                fileInput.type = 'file';
+                });, .spf';
+            }
+
+            // Přidaná metoda pro otevření souborů
+            openFileMenu() {nst files = Array.from(fileInput.files);
+                const fileInput = document.createElement('input');                    const promises = files.map(file => {
+                fileInput.type = 'file';
+                fileInput.accept = '.mpf, .spf';
+                fileInput.multiple = true;         reader.onload = (e) => {
+                   const program = e.target.result;
+                fileInput.onchange = (e) => {                                if (this.editor) {
+                    const files = Array.from(fileInput.files);lování řádků při načtení
+                    const promises = files.map(file => {        const lines = program.split('\n');
+                        return new Promise((resolve) => {p((line, i) => {
+                            const reader = new FileReader();const lineNumber = i + 1;
+                                        const prefix = lineNumber < 10 ? ' ' : '';=> {
+                                        return `${prefix}${lineNumber}: ${line}`;ram = e.target.result;
+                                    });                                if (this.editor) {
+                                    this.editor.value = numberedLines.join('\n');e číslování řádků při načtení
+t('\n');
+                                    // Spustit parser na nový kód= lines.map((line, i) => {
+                                    this.parser.parse(program);= i + 1;
+                                    this.simulator.updateToolPath(this.parser.toolPath);umber < 10 ? ' ' : '';
+                                }efix}${lineNumber}: ${line}`;
+                                resolve();
+                            };lue = numberedLines.join('\n');
+                            reader.readAsText(file);
+                        });
+                    });
+(this.parser.toolPath);
+                    Promise.all(promises).then(() => {
+                        console.log('Všechny programy byly načteny.');
+                        this.loadProgramList(files);
+                        this.toggleMenu('left');
+                    });                        });
+                };
+
+                fileInput.click();
+            }og('Všechny programy byly načteny.');
+st(files);
+            loadProgramList(files) {oggleMenu('left');
+                const programList = document.getElementById('programList');
+                if (!programList) return;
+
+                programList.innerHTML = '';                fileInput.click();
+                files.forEach(file => {
+                    const div = document.createElement('div');
+                    div.textContent = file.name;
+                    div.style.padding = '8px';ElementById('programList');
+                    div.style.cursor = 'pointer';ogramList) return;
+                    div.style.borderBottom = '1px solid #eee';
+                programList.innerHTML = '';
+                    div.onclick = () => { => {
+                        const reader = new FileReader();       const div = document.createElement('div');
+                        reader.onload = (e) => {                    div.textContent = file.name;
+                            if (this.editor) {g = '8px';
+                                const program = e.target.result;
+                                // Přidáme číslování řádků při načtení z programListm = '1px solid #eee';
+                                const lines = program.split('\n');
+                                const numberedLines = lines.map((line, i) => {
+                                    const lineNumber = i + 1;new FileReader();
+                                    const prefix = lineNumber < 10 ? ' ' : '';
+                                    return `${prefix}${lineNumber}: ${line}`;
+                                });= e.target.result;
+                                this.editor.value = numberedLines.join('\n');ání řádků při načtení z programList
+n');
+                                this.parser.parse(program);                                const numberedLines = lines.map((line, i) => {
+                                this.simulator.updateToolPath(this.parser.toolPath); lineNumber = i + 1;
+                            }umber < 10 ? ' ' : '';
+                        };efix}${lineNumber}: ${line}`;
+                        reader.readAsText(file);
+                        this.toggleMenu('right');s.join('\n');
+                    };
+
+                    programList.appendChild(div);Path);
+                });
+            }
+        }
+Menu('right');
+        // Inicializace aplikace po načtení DOM
+        window.addEventListener('DOMContentLoaded', () => {
+            window.app = new App();
+        });
+    </script>
+</body>
+</html>
