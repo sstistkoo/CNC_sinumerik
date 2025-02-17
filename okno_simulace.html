@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNC Simulátor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+        }
+
+        .simulator-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            background: #f0f0f0;
+        }
+
+        .controls {
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        #simulatorCanvas {
+            flex: 1;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .zoom-controls {
+            display: flex;
+            gap: 5px;
+        }
+
+        button {
+            padding: 5px 10px;
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #e8e8e8;
+        }
+
+        #info {
+            font-family: monospace;
+            margin-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="simulator-container">
+        <div class="controls">
+            <div class="zoom-controls">
+                <button onclick="zoomIn()">Zoom +</button>
+                <button onclick="zoomOut()">Zoom -</button>
+                <button onclick="resetView()">Reset</button>
+            </div>
+            <div id="info">X: 0.000 Z: 0.000</div>
+        </div>
+        <canvas id="simulatorCanvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simulatorCanvas');
+        const ctx = canvas.getContext('2d');
+        let scale = 1;
+        let offsetX = 0;
+        let offsetY = 0;
+        let isDragging = false;
+        let lastX = 0;
+        let lastY = 0;
+        let toolPath = [];
+
+        function setupCanvas() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+
+            const mmToPx = 3.78;
+            const marginX = 5 * mmToPx;  // 5mm od levého okraje
+            const marginY = 5 * mmToPx;  // 5mm od spodního okraje
+
+            // Upravené offsety pro zajištění viditelnosti celé spodní čáry
+            offsetX = marginX;
+            offsetY = canvas.height - marginY * 4;  // Zvětšený offset pro lepší viditelnost spodní části
+
+            draw();
+        }
+
+        function zoomIn() {
+            scale *= 1.2;
+            draw();
+        }
+
+        function zoomOut() {
+            scale /= 1.2;
+            draw();
+        }
+
+        function resetView() {
+            scale = 1.5;  // Výchozí přiblížení
+
+            // Používáme stejné hodnoty jako v setupCanvas
+            const mmToPx = 3.78;
+            const margin = 5 * mmToPx;
+
+            offsetX = margin;
+            offsetY = canvas.height - margin;
+
+            draw();
+        }
+
+        // Přidáme debounce pro resize
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                const oldScale = scale;
+                setupCanvas();
+                // Zachováme měřítko po změně velikosti
+                scale = oldScale;
+                draw();
+            }, 100);
+        });
+
+        function draw() {
+            ctx.save();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Upravený systém transformací
+            ctx.translate(offsetX, offsetY);
+            ctx.scale(scale, -scale); // Invertujeme Y osu
+
+            // Vykreslíme větší oblast mřížky a os
+            const viewportSize = Math.max(canvas.width, canvas.height) / scale;
+            drawGrid(viewportSize);
+            drawAxes(viewportSize);
+            drawToolPath();
+
+            ctx.restore();
+        }
+
+        function drawGrid(size) {
+            const gridSize = 50;
+            const numSquares = Math.ceil(size / gridSize);
+
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 0.5 / scale;
+
+            for (let i = -numSquares; i <= numSquares; i++) {
+                // Vertikální čáry
+                ctx.beginPath();
+                ctx.moveTo(i * gridSize, -size);
+                ctx.lineTo(i * gridSize, size);
+                ctx.stroke();
+
+                // Horizontální čáry
+                ctx.beginPath();
+                ctx.moveTo(-size, i * gridSize);
+                ctx.lineTo(size, i * gridSize);
+                ctx.stroke();
+            }
+        }
+
+        function drawAxes(size) {
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2 / scale;
+
+            // Osy vykreslíme přes celou viditelnou oblast
+            ctx.beginPath();
+            ctx.moveTo(-size, 0);
+            ctx.lineTo(size, 0);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(0, -size);
+            ctx.lineTo(0, size);
+            ctx.stroke();
+        }
+
+        function drawToolPath() {
+            if (toolPath.length < 2) return;
+
+            ctx.strokeStyle = 'blue';
+            ctx.lineWidth = 2 / scale;
+            ctx.beginPath();
+
+            for (let i = 0; i < toolPath.length; i++) {
+                const [x, z] = toolPath[i];
+                if (i === 0) {
+                    ctx.moveTo(z, -x); // Invertujeme osu X pro správnou orientaci
+                } else {
+                    ctx.lineTo(z, -x);
+                }
+            }
+            ctx.stroke();
+        }
+
+        function parseGCode(code) {
+            const lines = code.split('\n');
+            let currentX = 0;
+            let currentZ = 0;
+            toolPath = [[currentX, currentZ]];
+
+            for (const line of lines) {
+                const parts = line.trim().toUpperCase().split(' ');
+                let newX = currentX;
+                let newZ = currentZ;
+
+                for (const part of parts) {
+                    if (part.startsWith('X')) {
+                        newX = parseFloat(part.slice(1)) || currentX;
+                    } else if (part.startsWith('Z')) {
+                        newZ = parseFloat(part.slice(1)) || currentZ;
+                    }
+                }
+
+                if (newX !== currentX || newZ !== currentZ) {
+                    toolPath.push([newX, newZ]);
+                    currentX = newX;
+                    currentZ = newZ;
+                }
+            }
+            draw();
+        }
+
+        // Event listeners
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastX = e.clientX;
+            lastY = e.clientY;
+        });
+
+        // Upravíme událost pro pohyb myší
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            // Přepočet souřadnic vzhledem k transformovanému plátnu
+            const x = -((mouseY - canvas.height/2 - offsetY) / scale);
+            const z = (mouseX - canvas.width/2 - offsetX) / scale;
+
+            document.getElementById('info').textContent =
+                `X: ${x.toFixed(3)} Z: ${z.toFixed(3)}`;
+
+            if (isDragging) {
+                offsetX += e.clientX - lastX;
+                offsetY += e.clientY - lastY;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                draw();
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = -Math.sign(e.deltaY);
+            const factor = delta > 0 ? 1.1 : 0.9;
+            scale *= factor;
+            draw();
+        });
+
+        // Message handler pro příjem G-kódu
+        window.addEventListener('message', (event) => {
+            if (event.data.action === 'loadProgram') {
+                parseGCode(event.data.data);
+            } else if (event.data.action === 'tabChanged') {
+                // Když se přepne na simulátor, inicializujeme pohled
+                initializeView();
+            }
+        });
+
+        // Přidáme funkci pro inicializaci po přepnutí na simulátor
+        function initializeView() {
+            setupCanvas();
+            resetView();
+            draw();
+        }
+
+        // Inicializace
+        window.addEventListener('resize', setupCanvas);
+        setupCanvas();
+        resetView();
+    </script>
+</body>
+</html>
