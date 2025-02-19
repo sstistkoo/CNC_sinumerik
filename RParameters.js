@@ -5,48 +5,77 @@ export class RParameters {
     }
 
     parseL105(programText) {
-        console.group('Parsování L105:');
-        console.log('Text k parsování:', programText);
+        console.log('Parsování L105:', programText);
+        const params = [];
+        let currentValue = null;
 
         const lines = programText.split('\n');
-        let inParamSection = false;
-
-        lines.forEach(line => {
+        for (const line of lines) {
             const trimmedLine = line.trim();
 
-            // Detekce začátku parametrické sekce
-            if (trimmedLine.includes('PARAM:')) {
-                inParamSection = true;
-                console.log('Začátek parametrické sekce');
-                return;
-            }
-
             // Přeskočit komentáře a prázdné řádky
-            if (!inParamSection || trimmedLine.startsWith(';') || !trimmedLine) {
-                return;
+            if (!trimmedLine || trimmedLine.startsWith(';')) continue;
+
+            // Hledat přiřazení R-parametrů
+            const assignments = this.findRAssignments(trimmedLine);
+            for (const [param, expr] of assignments) {
+                try {
+                    const value = this.evaluateExpression(expr);
+                    // Zapamatovat hodnotu pro případné další výpočty
+                    currentValue = value;
+                    this.set(param, value);
+                    params.push({ num: param, value });
+                } catch (error) {
+                    console.error(`Chyba při zpracování ${param}=${expr}:`, error);
+                }
             }
 
-            // Najít všechna přiřazení R-parametrů na řádku
-            const rAssignments = trimmedLine.match(/R\d+=[-\d.+\/*\s()]+/g);
-            if (rAssignments) {
-                rAssignments.forEach(assignment => {
-                    const [param, expr] = assignment.split('=').map(s => s.trim());
-                    const num = param.substring(1); // odstranit 'R' z čísla parametru
+            // Zpracovat výrazy jako "R04=(462.2-40)"
+            const complexAssignments = line.match(/R(\d+)\s*=\s*\(([-\d.+\/*\s]+)\)/g);
+            if (complexAssignments) {
+                for (const assignment of complexAssignments) {
+                    const [_, num, expr] = assignment.match(/R(\d+)\s*=\s*\(([-\d.+\/*\s]+)\)/);
                     try {
                         const value = this.evaluateExpression(expr);
                         this.set(num, value);
-                        console.log(`✅ Nastaven parametr ${param} = ${value} (výraz: ${expr})`);
+                        params.push({ num, value });
                     } catch (error) {
-                        console.error(`❌ Chyba při nastavení ${param}:`, error);
+                        console.error(`Chyba při výpočtu ${assignment}:`, error);
                     }
-                });
+                }
             }
-        });
 
-        const params = this.getAll();
+            // Zpracovat výrazy s násobením jako "R54=R54*R69"
+            const mulAssignments = line.match(/R(\d+)\s*=\s*R\d+\s*\*\s*R\d+/g);
+            if (mulAssignments) {
+                for (const assignment of mulAssignments) {
+                    const [_, target, op1, op2] = assignment.match(/R(\d+)\s*=\s*R(\d+)\s*\*\s*R(\d+)/);
+                    try {
+                        const value = this.get(op1) * this.get(op2);
+                        this.set(target, value);
+                        params.push({ num: target, value });
+                    } catch (error) {
+                        console.error(`Chyba při násobení ${assignment}:`, error);
+                    }
+                }
+            }
+        }
+
         console.log('Načtené parametry:', params);
-        console.groupEnd();
         return params;
+    }
+
+    findRAssignments(line) {
+        const assignments = [];
+        const regex = /R(\d+)\s*=\s*([-\d.+\/*\s()]+)/g;
+        let match;
+
+        while ((match = regex.exec(line)) !== null) {
+            const [_, num, expr] = match;
+            assignments.push([num, expr]);
+        }
+
+        return assignments;
     }
 
     set(num, value) {
@@ -69,9 +98,20 @@ export class RParameters {
     }
 
     evaluateExpression(expr) {
-        const cleanExpr = expr.replace(/\s+/g, '')
-            .replace(/R(\d+)/g, (_, num) => this.get(num));
-        return Function('"use strict";return (' + cleanExpr + ')')();
+        if (!expr) return 0;
+
+        // Vyčistit výraz
+        const cleanExpr = expr
+            .replace(/\s+/g, '')
+            .replace(/R(\d+)/g, (_, num) => this.get(num).toString());
+
+        try {
+            const result = Function('"use strict";return (' + cleanExpr + ')')();
+            return parseFloat(result.toFixed(3));
+        } catch (error) {
+            console.error('Chyba při vyhodnocování:', expr, error);
+            return 0;
+        }
     }
 
     clear() {

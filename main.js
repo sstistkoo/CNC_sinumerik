@@ -337,15 +337,14 @@ fileInput.addEventListener('change', (e) => {
 let parseTimeout;
 editorTextarea.addEventListener('input', () => {
     clearTimeout(parseTimeout);
-    parseTimeout = setTimeout(() => {
+    parseTimeout = setTimeout(async () => {
         const programText = editorTextarea.value;
         // Zpracovat text přes parser
-        const parsedBlocks = cncParser.parseProgram(programText);
+        const parsedBlocks = await cncParser.parseProgram(programText);
 
         // Sestavit výsledný text včetně interpretovaných řádků
         const formattedText = parsedBlocks
             .map(block => {
-                // Přidat odsazení pro interpretované řádky
                 if (block.type === 'interpreted') {
                     return '    ' + block.originalLine;
                 }
@@ -879,7 +878,7 @@ updateHeights();
 
 // Upravit click handler pro program items
 function createProgramClickHandler(item, program) {
-    return () => {
+    return async () => {  // přidáno async
         // Uložit aktuální program před přepnutím
         if (activeProgram) {
             const currentCode = editorTextarea.value.split('\n');
@@ -893,18 +892,25 @@ function createProgramClickHandler(item, program) {
         // Nastavit kód do editoru
         editorTextarea.value = code.join('\n');
 
-        // Spustit parsování
-        const parsedBlocks = cncParser.parseProgram(code.join('\n'));
-        const formattedText = parsedBlocks
-            .map(block => block.type === 'interpreted' ? '    ' + block.originalLine : block.originalLine)
-            .join('\n');
+        try {
+            // Spustit parsování a počkat na výsledek
+            const parsedBlocks = await cncParser.parseProgram(code.join('\n'));
 
-        // Nastavit parsovaný text do horního editoru
-        parserTextarea.value = formattedText;
+            // Sestavit formátovaný text
+            const formattedText = parsedBlocks
+                .map(block => block.type === 'interpreted' ? '    ' + block.originalLine : block.originalLine)
+                .join('\n');
 
-        // Aktualizovat číslování řádků
-        updateLineNumbers(editorTextarea, editorLineNumbers);
-        updateLineNumbers(parserTextarea, parserLineNumbers);
+            // Nastavit parsovaný text do horního editoru
+            parserTextarea.value = formattedText;
+
+            // Aktualizovat číslování řádků
+            updateLineNumbers(editorTextarea, editorLineNumbers);
+            updateLineNumbers(parserTextarea, parserLineNumbers);
+
+        } catch (error) {
+            console.error('Chyba při parsování:', error);
+        }
 
         // Aktualizovat aktivní program
         if (activeProgram) {
