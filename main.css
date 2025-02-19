@@ -421,3 +421,11 @@
     .r-params-overlay.visible {
         display: block;
     }
+
+    /* Upravit styly pro prázdné řádky číslování */
+    .line-number.empty {
+        visibility: hidden;
+        color: transparent;
+        pointer-events: none;
+        user-select: none;
+    }

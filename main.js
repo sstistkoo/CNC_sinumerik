@@ -366,15 +366,17 @@ function updateLineNumbers(textarea, numberContainer) {
     const lines = textarea.value.split('\n');
     const lineCount = lines.length;
     const numbers = [];
+    let currentLineNumber = 1;
 
     for (let i = 0; i < lineCount; i++) {
         const line = lines[i];
-        if (textarea === parserTextarea && line.startsWith('    ;')) {
-            // Pro interpretované řádky v parseru přidat prázdný řádek
+        if (textarea === parserTextarea && line.trim().startsWith('; →')) {
+            // Pro interpretované R-parametry přidat prázdný div bez čísla
             numbers.push('<div class="line-number empty"></div>');
         } else {
             // Pro ostatní řádky přidat číslo
-            numbers.push(`<div data-line="${i + 1}" class="line-number">${i + 1}</div>`);
+            numbers.push(`<div data-line="${currentLineNumber}" class="line-number">${currentLineNumber}</div>`);
+            currentLineNumber++;
         }
     }
 
