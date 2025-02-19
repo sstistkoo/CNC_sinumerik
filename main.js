@@ -29,6 +29,7 @@ const cncParser = new CNCParser();
 const parserLineNumbers = document.getElementById('parserLineNumbers');
 const editorLineNumbers = document.getElementById('editorLineNumbers');
 
+<<<<<<< HEAD
 // Přidat nové konstanty pro tlačítka
 const loadButton = document.getElementById('loadButton');
 const saveButton = document.getElementById('saveButton');
@@ -45,6 +46,8 @@ function restoreProgram(name) {
     return programBackups.get(name) || [];
 }
 
+=======
+>>>>>>> b44715124eddb1dd3105908983a45662c06629b7
 // Opravit funkci updateHeights
 function updateHeights() {
     const middleHeight = isMiddleOpen ? MIDDLE_HEIGHT : 0; // Změna z 1 na 0
@@ -144,13 +147,17 @@ document.addEventListener('mouseup', () => {
     }
 });
 
+<<<<<<< HEAD
 // Upravit funkci adjustHeightsForTopPanel pro menší výšku
+=======
+>>>>>>> b44715124eddb1dd3105908983a45662c06629b7
 function adjustHeightsForTopPanel(isOpen) {
     if (isOpen) {
         originalTopHeight = topHeight;
         originalBottomHeight = bottomHeight;
         const programList = document.getElementById('programList');
         const items = programList.children;
+<<<<<<< HEAD
 
         // Konstanty pro výpočet výšky
         const controlsHeight = 45; // Základní výška panelu
@@ -172,6 +179,20 @@ function adjustHeightsForTopPanel(isOpen) {
         container.style.marginTop = `${panelHeight}px`;
 
         // Přepočet výšek editorů
+=======
+        // Konstanty pro výpočet výšky
+        const controlsHeight = 45; // Výška panelu s ovládacími prvky
+        const itemPadding = 10;    // Padding pro položky
+        // Výpočet skutečné šířky dostupné pro položky
+        const availableWidth = window.innerWidth - 150; // Odečteme prostor pro controls
+        const itemWidth = 150;      // Přibližná šířka jedné položky
+        const itemsPerRow = Math.floor(availableWidth / itemWidth);
+        const rows = Math.ceil(items.length / itemsPerRow) || 1;
+        // Vypočítáme celkovou výšku - pokud je jeden řádek, použijeme controlsHeight
+        const panelHeight = rows === 1 ? controlsHeight : controlsHeight * rows;
+        topPanel.style.height = `${panelHeight}px`;
+        container.style.marginTop = `${panelHeight}px`;
+>>>>>>> b44715124eddb1dd3105908983a45662c06629b7
         const reduction = (panelHeight / window.innerHeight) * 100;
         const ratio = topHeight / (topHeight + bottomHeight);
         const availableSpace = 100 - reduction;
@@ -183,8 +204,11 @@ function adjustHeightsForTopPanel(isOpen) {
             bottomHeight = originalBottomHeight;
         }
         container.style.marginTop = '0';
+<<<<<<< HEAD
         // Odstranit visibility property
         topPanel.style.removeProperty('visibility');
+=======
+>>>>>>> b44715124eddb1dd3105908983a45662c06629b7
     }
     updateHeights();
 }
@@ -227,6 +251,7 @@ freezeButton.addEventListener('click', () => {
     freezeButton.classList.toggle('active');
 });
 
+<<<<<<< HEAD
 // Upravit funkci processAndDisplayCode
 function processAndDisplayCode(programText, programName) {
     // Nejdřív uložit aktuální obsah
@@ -254,23 +279,39 @@ function processAndDisplayCode(programText, programName) {
     // Zobrazit kód
     parserTextarea.value = text;
     editorTextarea.value = text;
+=======
+function processAndDisplayCode(programText) {
+    editorTextarea.value = programText;
+    const parsedBlocks = cncParser.parseProgram(programText);
+
+    // Zachovat přesně stejný text v obou oknech
+    parserTextarea.value = programText;
+>>>>>>> b44715124eddb1dd3105908983a45662c06629b7
 
     updateLineNumbers(editorTextarea, editorLineNumbers);
     updateLineNumbers(parserTextarea, parserLineNumbers);
 }
 
+<<<<<<< HEAD
 // Upravit načítání souborů
+=======
+// Opravit event listener pro soubory
+>>>>>>> b44715124eddb1dd3105908983a45662c06629b7
 fileInput.addEventListener('change', (e) => {
     const files = Array.from(e.target.files);
     const programList = document.getElementById('programList');
     programList.innerHTML = '';
+<<<<<<< HEAD
     programStorage.clear();
 
     console.log('Načítání CNC souborů:', files.map(f => f.name).join(', '));
+=======
+>>>>>>> b44715124eddb1dd3105908983a45662c06629b7
 
     files.forEach(file => {
         const ext = file.name.split('.').pop().toLowerCase();
         if (['mpf', 'spf', 'nc', 'cnc'].includes(ext)) {
+<<<<<<< HEAD
             const reader = new FileReader();
             reader.onload = function(event) {
                 const content = event.target.result;
@@ -298,6 +339,18 @@ fileInput.addEventListener('change', (e) => {
 
                     editorTextarea.value = text;
                     parserTextarea.value = text;
+=======
+            const programItem = document.createElement('div');
+            programItem.className = 'program-item';
+            programItem.textContent = file.name;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const content = event.target.result;
+                programItem.onclick = () => {
+                    editorTextarea.value = content;
+                    parserTextarea.value = content;
+>>>>>>> b44715124eddb1dd3105908983a45662c06629b7
 
                     updateLineNumbers(editorTextarea, editorLineNumbers);
                     updateLineNumbers(parserTextarea, parserLineNumbers);
@@ -312,6 +365,7 @@ fileInput.addEventListener('change', (e) => {
                         toggleTopPanel();
                     }
                 };
+<<<<<<< HEAD
 
                 programList.appendChild(programItem);
 
@@ -321,6 +375,12 @@ fileInput.addEventListener('change', (e) => {
                 }
             };
             reader.readAsText(file);
+=======
+            };
+            reader.readAsText(file);
+
+            programList.appendChild(programItem);
+>>>>>>> b44715124eddb1dd3105908983a45662c06629b7
         }
     });
 
@@ -478,21 +538,29 @@ window.addEventListener('resize', () => {
 
 window.addEventListener('resize', updateHeights);
 
+<<<<<<< HEAD
 // Upravit event listenery v DOMContentLoaded
+=======
+>>>>>>> b44715124eddb1dd3105908983a45662c06629b7
 document.addEventListener('DOMContentLoaded', function() {
     // Přidat event listener na editor-label pro otevření horního panelu
     const editorLabel = document.querySelector('.editor-label');
     if (editorLabel) {
+<<<<<<< HEAD
         editorLabel.addEventListener('click', () => {
             // Přepínat třídu open místo visibility
             const isOpen = topPanel.classList.toggle('open');
             adjustHeightsForTopPanel(isOpen);
         });
+=======
+        editorLabel.addEventListener('click', toggleTopPanel);
+>>>>>>> b44715124eddb1dd3105908983a45662c06629b7
     }
 
     // Přidat event listener na close button v horním panelu
     const topPanelCloseBtn = topPanel.querySelector('.close-button');
     if (topPanelCloseBtn) {
+<<<<<<< HEAD
         topPanelCloseBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -500,6 +568,9 @@ document.addEventListener('DOMContentLoaded', function() {
             topPanel.classList.remove('open');
             adjustHeightsForTopPanel(false);
         });
+=======
+        topPanelCloseBtn.addEventListener('click', toggleTopPanel);
+>>>>>>> b44715124eddb1dd3105908983a45662c06629b7
     }
 
     // Přidat event listenery pro zavírací tlačítka bočních panelů
@@ -517,6 +588,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Inicializovat číslování řádků
     updateLineNumbers(editorTextarea, editorLineNumbers);
     updateLineNumbers(parserTextarea, parserLineNumbers);
+<<<<<<< HEAD
 
     // Zavolat načtení programů
     loadDefaultProgram();
@@ -831,6 +903,8 @@ document.getElementById('saveCncButton').addEventListener('click', () => {
     const type = confirm('Uložit jako hlavní program (OK) nebo podprogram (Cancel)?') ?
         'MPF' : 'SPF';
     saveCncFile(type);
+=======
+>>>>>>> b44715124eddb1dd3105908983a45662c06629b7
 });
 
 updateHeights();
