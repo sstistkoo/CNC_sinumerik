@@ -59,13 +59,16 @@
         padding: 1.5rem 0.5rem 1rem;
         font-size: 1rem;
         font-family: monospace;
-        line-height: 1.5rem; /* Přesná výška řádku */
+        line-height: 1.5rem !important; /* Vynutit konzistentní výšku řádku */
         white-space: pre;
         tab-size: 4;
         overflow-y: auto;
         background-color: transparent;
         position: relative;
         z-index: 2;
+    }
+    .editor textarea[readonly] {
+        background-color: #f9fafb;
     }
     .line-numbers {
         width: 45px;
@@ -92,6 +95,11 @@
         background-color: #60a5fa;
         color: white;
         font-weight: bold;
+    }
+    .line-numbers div.interpreted {
+        height: 1.5rem;
+        visibility: hidden;
+        color: transparent;
     }
     .middle-window {
         background-color: #e5e7eb;
@@ -327,4 +335,20 @@
         justify-content: space-between;
         align-items: center;
         height: 45px;
+    }
+
+    /* Přidat styly pro debug tlačítko */
+    #debugButton {
+        background-color: #475569;
+        color: #94a3b8;
+    }
+
+    #debugButton.active {
+        background-color: #2563eb;
+        color: white;
+    }
+
+    #debugButton svg {
+        width: 20px;
+        height: 20px;
     }

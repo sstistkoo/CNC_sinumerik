@@ -227,13 +227,46 @@ freezeButton.addEventListener('click', () => {
     freezeButton.classList.toggle('active');
 });
 
+// Přidat na začátek souboru po importech
+const DEBUG = {
+    enabled: true, // Výchozí hodnota na true
+    log(...args) {
+        if (this.enabled) {
+            if (typeof args[0] === 'string' && args[0].includes('→')) {
+                // Zvýraznit parsované řádky
+                console.log('%c' + args[0], 'color: #2563eb; font-weight: bold;');
+            } else {
+                console.log(...args);
+            }
+        }
+    }
+};
+
+// Přidat tlačítko pro debug do horního panelu
+document.querySelector('.top-panel-controls').insertAdjacentHTML('afterbegin', `
+    <button id="debugButton" class="square-button" title="Debug mode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 19l7-7 3 3-7 7-3-3z"/>
+            <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
+            <path d="M2 2l7.586 7.586"/>
+            <circle cx="11" cy="11" r="2"/>
+        </svg>
+    </button>
+`);
+
+// Přidat handler pro debug tlačítko
+document.getElementById('debugButton').addEventListener('click', () => {
+    DEBUG.enabled = !DEBUG.enabled;
+    document.getElementById('debugButton').classList.toggle('active');
+});
+
 // Upravit funkci processAndDisplayCode
 function processAndDisplayCode(programText, programName) {
     // Nejdřív uložit aktuální obsah
     if (activeProgram) {
         const currentCode = editorTextarea.value.split('\n');
         programCodes.set(activeProgram.textContent, currentCode);
-        console.debug('Ukládám kód programu:', activeProgram.textContent, currentCode.length);
+        DEBUG.log('Ukládám kód programu:', activeProgram.textContent, currentCode.length);
     }
 
     // Zpracovat nový kód
@@ -248,7 +281,7 @@ function processAndDisplayCode(programText, programName) {
     if (programName) {
         const code = text.split('\n');
         programCodes.set(programName, code);
-        console.debug('Nastavuji kód programu:', programName, code.length);
+        DEBUG.log('Nastavuji kód programu:', programName, code.length);
     }
 
     // Zobrazit kód
@@ -266,7 +299,7 @@ fileInput.addEventListener('change', (e) => {
     programList.innerHTML = '';
     programStorage.clear();
 
-    console.log('Načítání CNC souborů:', files.map(f => f.name).join(', '));
+    DEBUG.log('Načítání CNC souborů:', files.map(f => f.name).join(', '));
 
     files.forEach(file => {
         const ext = file.name.split('.').pop().toLowerCase();
@@ -275,7 +308,7 @@ fileInput.addEventListener('change', (e) => {
             reader.onload = function(event) {
                 const content = event.target.result;
                 const lines = content.split('\n');
-                console.log(`Načítám program ${file.name}:`, lines.length, 'řádků');
+                DEBUG.log(`Načítám program ${file.name}:`, lines.length, 'řádků');
 
                 // Uložit program do úložiště
                 programStorage.save(file.name, lines);
@@ -333,30 +366,47 @@ fileInput.addEventListener('change', (e) => {
 // Přidat po inicializaci cncParser
 let parseTimeout;
 editorTextarea.addEventListener('input', () => {
-    // Debounce parsování pro lepší výkon
     clearTimeout(parseTimeout);
     parseTimeout = setTimeout(() => {
         const programText = editorTextarea.value;
+
+        console.group('Parsování editoru');
         const parsedBlocks = cncParser.parseProgram(programText);
+        parsedBlocks.forEach(block => {
+            if (block.type === 'interpreted') {
+                console.log(block.originalLine);
+            }
+        });
+        console.groupEnd();
+
         parserTextarea.value = parsedBlocks
-            .map(block => cncParser.getFormattedBlock(block))
+            .map(block => block.originalLine)
             .join('\n');
+
+        // Aktualizovat číslování
         updateLineNumbers(parserTextarea, parserLineNumbers);
-    }, 300); // 300ms debounce
+    }, 300);
 });
 
 // Funkce pro aktualizaci čísel řádků
 function updateLineNumbers(textarea, numberContainer) {
     const lines = textarea.value.split('\n');
-    const lineCount = lines.length;
     const numbers = [];
+    let currentNumber = 1;
 
-    for (let i = 0; i < lineCount; i++) {
-        // Vždy zobrazit pouze pořadové číslo řádku
-        numbers.push(`<div data-line="${i + 1}" class="line-number">${i + 1}</div>`);
-    }
+    lines.forEach(line => {
+        if (line.startsWith('; →')) {
+            // Pro interpretované řádky přidat prázdný div
+            numbers.push('<div class="line-number interpreted"></div>');
+        } else {
+            // Pro normální řádky přidat číslo
+            numbers.push(`<div data-line="${currentNumber}" class="line-number">${currentNumber}</div>`);
+            currentNumber++;
+        }
+    });
 
     numberContainer.innerHTML = numbers.join('');
+
     const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight);
     Array.from(numberContainer.children).forEach(div => {
         div.style.height = `${lineHeight}px`;
@@ -520,11 +570,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Zavolat načtení programů
     loadDefaultProgram();
+
+    // Aktivovat debug mode při startu
+    const debugButton = document.getElementById('debugButton');
+    debugButton.classList.add('active');
+    DEBUG.enabled = true;
 });
 
 async function loadDefaultProgram() {
     try {
-        console.log('Načítám programy...');
+        DEBUG.log('Načítám programy...');
 
         const response = await fetch('data/K1_03_4431.json');
         const fullProgram = await response.json();
@@ -538,7 +593,7 @@ async function loadDefaultProgram() {
 // Přepsat původní funkci loadProgramsFromJSON
 async function loadProgramsFromJSON(data) {
     try {
-        console.log('Načítání programů z JSON...');
+        DEBUG.log('Načítání programů z JSON...');
 
         if (!data?.programs?.length) {
             throw new Error('JSON neobsahuje žádné programy');
@@ -610,7 +665,7 @@ function saveProgramsToJSON() {
         });
 
         // Debug výpis
-        console.log('Programy k uložení:', programs.map(p => ({
+        DEBUG.log('Programy k uložení:', programs.map(p => ({
             name: p.name,
             lines: p.code.length
         })));
@@ -651,19 +706,19 @@ const programStorage = {
         if (!name) return;
         const lines = Array.isArray(code) ? [...code] :
                      typeof code === 'string' ? code.split('\n') : [];
-        console.log(`Ukládám program ${name}:`, lines.length, 'řádků');
+        DEBUG.log(`Ukládám program ${name}:`, lines.length, 'řádků');
         this.programs.set(name, lines);
     },
 
     load(name) {
         const code = this.programs.get(name);
-        console.log(`Načítám program ${name}:`, code?.length || 0, 'řádků');
+        DEBUG.log(`Načítám program ${name}:`, code?.length || 0, 'řádků');
         return code || [];
     },
 
     clear() {
         this.programs.clear();
-        console.log('Úložiště vyčištěno');
+        DEBUG.log('Úložiště vyčištěno');
     }
 };
 
@@ -675,7 +730,7 @@ document.getElementById('saveButton').removeEventListener('click', saveProgramsT
 // Přidáme nový event listener na kliknutí na saveButton element (ne jQuery)
 document.getElementById('saveButton').addEventListener('click', (e) => {
     e.preventDefault();
-    console.log('Save button clicked!');
+    DEBUG.log('Save button clicked!');
 
     try {
         // Uložit aktuální program
@@ -700,7 +755,7 @@ document.getElementById('saveButton').addEventListener('click', (e) => {
 
         // Debug výpis
         programs.forEach(p => {
-            console.log(`Program ${p.name}:`, p.code.length, 'řádků');
+            DEBUG.log(`Program ${p.name}:`, p.code.length, 'řádků');
         });
 
         // Vytvořit a uložit JSON
@@ -723,7 +778,7 @@ document.getElementById('saveButton').addEventListener('click', (e) => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        console.log('Soubor uložen:', jsonData.name, 'programů:', programs.length);
+        DEBUG.log('Soubor uložen:', jsonData.name, 'programů:', programs.length);
 
     } catch (error) {
         console.error('Chyba při ukládání:', error);
@@ -765,19 +820,31 @@ updateHeights();
 // Upravit click handler pro program items
 function createProgramClickHandler(item, program) {
     return () => {
-        // Uložit aktuální program před přepnutím
         if (activeProgram) {
             const currentCode = editorTextarea.value.split('\n');
             programStorage.save(activeProgram.textContent, currentCode);
         }
 
-        // Načíst nový program
+        // Načíst a zparsovat nový program
         const code = programStorage.load(program.name);
-        console.log(`Načítám program ${program.name}:`, code.length, 'řádků');
+        const programText = code.join('\n');
 
-        editorTextarea.value = code.join('\n');
-        parserTextarea.value = code.join('\n');
+        console.group('Parsování programu:', program.name);
+        const parsedBlocks = cncParser.parseProgram(programText);
+        parsedBlocks.forEach(block => {
+            if (block.type === 'interpreted') {
+                console.log(block.originalLine);
+            }
+        });
+        console.groupEnd();
 
+        // Nastavit texty do editorů
+        editorTextarea.value = programText;
+        parserTextarea.value = parsedBlocks
+            .map(block => block.originalLine)
+            .join('\n');
+
+        // Aktualizovat číslování
         updateLineNumbers(editorTextarea, editorLineNumbers);
         updateLineNumbers(parserTextarea, parserLineNumbers);
 
@@ -822,7 +889,7 @@ function saveCncFile(type = 'MPF') {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    console.log(`Uložen CNC soubor: ${fileName}`);
+    DEBUG.log(`Uložen CNC soubor: ${fileName}`);
 }
 
 // Přidat event listener pro ukládání CNC souboru
