@@ -1,10 +1,14 @@
-export default {
-    server: {
-        port: 5173,
-        watch: {
-            usePolling: true
-        }
-    },
-    base: './',  // Důležité pro relativní cesty
-    assetsInclude: ['**/*.json']
-}
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  server: {
+    port: 5173,
+    host: true,
+    watch: {
+      usePolling: true,
+    }
+  },
+  optimizeDeps: {
+    include: []
+  }
+})

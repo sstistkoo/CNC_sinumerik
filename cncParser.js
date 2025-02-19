@@ -8,7 +8,6 @@ export class CNCParser {
         this.programBlocks = [];
         const lines = programText.split('\n');
 
-        // Přímé mapování řádků
         this.programBlocks = lines.map((line, index) => ({
             lineNumber: index + 1,
             originalLine: line,
@@ -33,11 +32,6 @@ export class CNCParser {
     }
 
     getFormattedBlock(block) {
-<<<<<<< HEAD
-        // Vrátit přesně původní řádek bez jakýchkoliv úprav
-=======
-        // Vrátit přesně původní řádek bez úprav
->>>>>>> b44715124eddb1dd3105908983a45662c06629b7
         return block.originalLine;
     }
 }
