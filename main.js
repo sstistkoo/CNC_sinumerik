@@ -371,22 +371,16 @@ function updateLineNumbers(textarea, numberContainer) {
     for (let i = 0; i < lineCount; i++) {
         const line = lines[i];
         if (textarea === parserTextarea && line.trim().startsWith('; →')) {
-            // Pro interpretované R-parametry přidat prázdný div bez čísla
-            numbers.push('<div class="line-number empty"></div>');
+            // Pro interpretované řádky v parseru
+            numbers.push('<div class="interpreted">&nbsp;</div>');
         } else {
-            // Pro ostatní řádky přidat číslo
-            numbers.push(`<div data-line="${currentLineNumber}" class="line-number">${currentLineNumber}</div>`);
+            // Pro normální řádky
+            numbers.push(`<div data-line="${currentLineNumber}">${currentLineNumber}</div>`);
             currentLineNumber++;
         }
     }
 
     numberContainer.innerHTML = numbers.join('');
-    const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight);
-    Array.from(numberContainer.children).forEach(div => {
-        div.style.height = `${lineHeight}px`;
-    });
-
-    syncScroll(textarea, numberContainer);
 }
 
 // Funkce pro synchronizaci scrollování

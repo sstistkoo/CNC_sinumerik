@@ -101,6 +101,11 @@
         visibility: hidden;
         color: transparent;
     }
+    .line-numbers div.interpreted {
+        color: #6b7280;
+        font-style: italic;
+        font-size: 0.9em;
+    }
     .middle-window {
         background-color: #e5e7eb;
         position: relative;
@@ -420,12 +425,4 @@
 
     .r-params-overlay.visible {
         display: block;
-    }
-
-    /* Upravit styly pro prázdné řádky číslování */
-    .line-number.empty {
-        visibility: hidden;
-        color: transparent;
-        pointer-events: none;
-        user-select: none;
     }
