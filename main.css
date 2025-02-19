@@ -1,0 +1,319 @@
+* {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+    body {
+        height: 100vh;
+        overflow: hidden;
+        touch-action: none;
+        font-family: Arial, sans-serif;
+    }
+    .container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background-color: #f3f4f6;
+    }
+    .editor {
+        display: flex;
+        background-color: white;
+        overflow: hidden;
+        position: relative;
+        height: 100%;
+    }
+    .editor-label {
+        position: absolute;
+        top: 0;
+        right: 8px;
+        padding: 4px 8px 8px;
+        background-color: #e5e7eb;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #374151;
+        z-index: 10;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 60px;
+    }
+    .editor-label::after {
+        content: '';
+        margin-top: 8px;
+        width: 24px;
+        height: 4px;
+        background-color: #6b7280;
+        border-radius: 9999px;
+        box-shadow: 0 6px 0 #6b7280;
+    }
+    .editor-label:hover {
+        background-color: #d1d5db;
+    }
+    .editor textarea {
+        width: 100%;
+        height: 100%;
+        resize: none;
+        border: 1px solid #d1d5db;
+        padding: 1.5rem 0.5rem 1rem;
+        font-size: 1rem;
+        font-family: monospace;
+        line-height: 1.5rem; /* Přesná výška řádku */
+        white-space: pre;
+        tab-size: 4;
+        overflow-y: auto;
+        background-color: transparent;
+        position: relative;
+        z-index: 2;
+    }
+    .line-numbers {
+        width: 45px;
+        padding: 1.5rem 0.2rem 1rem;
+        background-color: #f3f4f6;
+        border-right: 1px solid #d1d5db;
+        text-align: right;
+        font-family: monospace;
+        user-select: none;
+        overflow: hidden;
+        font-size: 1rem;
+        line-height: 1.5rem; /* Přesná výška řádku */
+    }
+    .line-highlight {
+        position: absolute;
+        left: 45px; /* Upraveno pro přesné zarovnání */
+        right: 0;
+        height: 1.5rem;
+        background-color: rgba(96, 165, 250, 0.1);
+        pointer-events: none;
+        z-index: 1;
+    }
+    .line-numbers div.active {
+        background-color: #60a5fa;
+        color: white;
+        font-weight: bold;
+    }
+    .middle-window {
+        background-color: #e5e7eb;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease-in-out;
+        border-top: 1px solid #d1d5db;
+        border-bottom: 1px solid #d1d5db;
+        height: 0;
+    }
+    .middle-window.hidden {
+        height: 0;
+        visibility: hidden;
+        opacity: 0;
+    }
+    .middle-content {
+        height: 100%;
+        padding: 0.5rem;
+        display: flex;
+        align-items: center;
+        transition: opacity 0.3s;
+        opacity: 1;
+    }
+    .middle-content.hidden {
+        opacity: 0;
+        visibility: hidden;
+    }
+    .square-button {
+        width: 45px;
+        height: 45px;
+        background-color: #64748b;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        cursor: pointer;
+        margin: 0 10px;
+    }
+    .square-button:hover {
+        background-color: #475569;
+    }
+    .file-icon {
+        width: 50px;
+        height: 50px;
+        cursor: pointer;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin: 0 auto;
+        background-color: #f3f4f6;
+        padding: 10px;
+        border-radius: 8px;
+        border: 2px dashed #d1d5db;
+    }
+    .file-icon svg {
+        width: 24px;
+        height: 24px;
+        color: #374151;
+    }
+    .file-icon:hover {
+        background-color: #e5e7eb;
+        border-color: #9ca3af;
+    }
+    .file-icon:hover svg {
+        color: #1f2937;
+    }
+    .file-icon span {
+        font-size: 12px;
+        margin-top: 5px;
+        text-align: center;
+        color: #374151;
+    }
+    .file-input {
+        display: none;
+    }
+    .side-panel {
+        position: fixed;
+        top: 0;
+        height: 100vh;
+        width: 300px;
+        background-color: white;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease-in-out;
+        z-index: 1001;
+    }
+    .left-panel {
+        left: 0;
+        transform: translateX(-100%);
+    }
+    .right-panel {
+        right: 0;
+        transform: translateX(100%);
+    }
+    .side-panel.open {
+        transform: translateX(0);
+    }
+    .close-button {
+        position: absolute;
+        top: 10px;
+        width: 30px;
+        height: 30px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 24px;
+        color: #374151;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        right: 10px;  /* Změna pozice křížku */
+    }
+    .left-panel .close-button {
+        right: 10px;
+    }
+    .right-panel .close-button {
+        left: 10px;
+    }
+    .top-panel {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: auto;
+        background-color: white;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        transform: translateY(-100%);
+        transition: transform 0.3s ease-in-out;
+        z-index: 1001;
+        padding: 0;
+        min-height: 45px; /* Minimální výška pro zobrazení ovládacích prvků */
+    }
+    .top-panel.open {
+        transform: translateY(0);
+    }
+    .program-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 5px 10px;
+        overflow-y: visible;
+        flex: 1;
+        height: 45px;
+        align-items: center;
+    }
+    .program-item {
+        height: 35px;
+        display: flex;
+        align-items: center;
+        padding: 0 1rem;
+        background-color: #f3f4f6;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+        font-size: 0.9rem;
+    }
+    .program-item:hover {
+        background-color: #e5e7eb;
+    }
+    .top-panel-controls {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        padding: 5px 15px;
+        height: 45px;
+        gap: 15px;  /* Mezera mezi ikonami */
+        border-left: 1px solid #e5e7eb;
+        background-color: white;
+    }
+    .freeze-button {
+        width: 35px;
+        height: 35px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;          /* Odstranění margin */
+        position: relative; /* Přidáno pro konzistenci */
+    }
+    .close-button {
+        position: relative;  /* Změna z absolute na relative */
+        top: auto;          /* Odstranění absolute pozicování */
+        right: auto;        /* Odstranění absolute pozicování */
+        width: 35px;
+        height: 35px;
+        font-size: 28px;
+    }
+    .freeze-button svg {
+        width: 24px;
+        height: 24px;
+    }
+    .close-button {
+        width: 35px;
+        height: 35px;
+        font-size: 28px; /* Větší křížek */
+    }
+    /* Odstraníme margin-right, protože používáme gap v parent elementu */
+    .freeze-button {
+        margin-right: 0;
+    }
+    .freeze-button span {
+        display: none; /* Skryjeme text */
+    }
+    .freeze-button.active {
+        color: #2563eb;
+    }
+    .program-item.active {
+        background-color: #60a5fa;
+        color: white;
+        border-color: #3b82f6;
+    }
+    .program-item.active:hover {
+        background-color: #3b82f6;
+    }
+    /* Přidat nový wrapper pro flex layout */
+    .top-panel-wrapper {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        height: 45px;
+    }
