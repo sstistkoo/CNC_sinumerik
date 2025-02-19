@@ -364,13 +364,24 @@ editorTextarea.addEventListener('input', () => {
 // Funkce pro aktualizaci čísel řádků
 function updateLineNumbers(textarea, numberContainer) {
     const lines = textarea.value.split('\n');
-    const lineCount = lines.length;
-    const numbers = [];
+    const editorLines = textarea === editorTextarea ?
+        lines :
+        lines.filter(line => !line.trim().startsWith('; →'));
 
-    for (let i = 0; i < lineCount; i++) {
-        // Vždy zobrazit pouze pořadové číslo řádku
-        numbers.push(`<div data-line="${i + 1}" class="line-number">${i + 1}</div>`);
-    }
+    const numbers = [];
+    let editorLineNumber = 1;
+
+    lines.forEach((line) => {
+        const isInterpretedLine = line.trim().startsWith('; →');
+        if (textarea === parserTextarea && isInterpretedLine) {
+            // Interpretované řádky bez čísel
+            numbers.push('<div class="line-number empty"></div>');
+        } else {
+            // Původní řádky s čísly
+            numbers.push(`<div data-line="${editorLineNumber}" class="line-number">${editorLineNumber}</div>`);
+            editorLineNumber++;
+        }
+    });
 
     numberContainer.innerHTML = numbers.join('');
     const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight);
@@ -417,14 +428,36 @@ function addLineHighlight(textarea, lineNumber) {
 }
 
 function scrollToLine(textarea, lineNumber, forceCenter = false) {
-    // Centrovat v parseru a také když je vyžádáno force center
-    if (textarea === parserTextarea || forceCenter) {
-        const lineHeight = 24;
-        const paddingTop = parseFloat(getComputedStyle(textarea).paddingTop);
-        const targetPosition = (lineNumber - 1) * lineHeight + paddingTop;
-        const centerOffset = (textarea.clientHeight - lineHeight) / 2;
-        textarea.scrollTop = targetPosition - centerOffset;
+    const lines = textarea.value.split('\n');
+
+    // Vypočítat skutečnou pozici řádku (přeskočit interpretované řádky)
+    let actualPosition = 0;
+    let targetLineIndex = 0;
+
+    if (textarea === parserTextarea) {
+        let originalLineCount = 0;
+        for (let i = 0; i < lines.length; i++) {
+            if (!lines[i].trim().startsWith('; →')) {
+                originalLineCount++;
+                if (originalLineCount === lineNumber) {
+                    targetLineIndex = i;
+                    break;
+                }
+            }
+            actualPosition += 24; // Výška řádku
+        }
+    } else {
+        targetLineIndex = lineNumber - 1;
+        actualPosition = targetLineIndex * 24;
     }
+
+    const lineHeight = 24;
+    const paddingTop = parseFloat(getComputedStyle(textarea).paddingTop);
+
+    // Centrovat na skutečnou pozici řádku
+    const targetPosition = actualPosition + paddingTop;
+    const centerOffset = (textarea.clientHeight - lineHeight) / 2;
+    textarea.scrollTop = targetPosition - centerOffset;
 }
 
 // Upravit funkci synchronizeLines
@@ -1066,3 +1099,12 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ...existing code... */
+
+// Přidat do CSS styly pro prázdné řádky
+document.head.insertAdjacentHTML('beforeend', `
+<style>
+.line-number.empty {
+    visibility: hidden;
+}
+</style>
+`);
