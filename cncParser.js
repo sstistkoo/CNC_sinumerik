@@ -55,11 +55,11 @@ export class CNCParser {
 
             // Zpracovat pohybové příkazy
             if (this.hasCoordinates(line)) {
-                const coords = this.parseMotion(line);
-                if (coords) {
+                const parsedMotion = this.parseMotion(line);
+                if (parsedMotion) {
                     result.push({
                         lineNumber: i + 1,
-                        originalLine: `    ; → X${coords.X.toFixed(3)} Z${coords.Z.toFixed(3)}`,
+                        originalLine: parsedMotion.interpreted,
                         type: 'interpreted'
                     });
                 }
@@ -102,7 +102,17 @@ export class CNCParser {
 
     parseMotion(line) {
         try {
-            // Zachovat předchozí pozice
+            // Extrahovat všechny potřebné informace z řádku
+            const blockMatch = line.match(/^N(\d+)/);
+            const blockNum = blockMatch ? blockMatch[1] : '';
+
+            const gCodes = line.match(/G[0-4]\d?/g) || [];
+            const feedMatch = line.match(/F([\d.]+)/);
+            const speedMatch = line.match(/S=?([\d.]+)/);
+            const mCodes = line.match(/M\d+/g) || [];
+            const crMatch = line.match(/CR=([\d.]+)/);
+
+            // Zachovat předchozí hodnoty a zpracovat pohyby
             const prevX = this.currentPosition.X;
             const prevZ = this.currentPosition.Z;
 
@@ -143,7 +153,36 @@ export class CNCParser {
             this.currentPosition = { X: newX, Z: newZ };
             this.absolutePosition = { X: newX, Z: newZ };
 
-            return this.absolutePosition;
+            // Sestavit interpretovaný řádek
+            let interpreted = '    ; → ';
+
+            // Přidat číslo bloku
+            if (blockNum) interpreted += `N${blockNum} `;
+
+            // Přidat G-kódy
+            interpreted += gCodes.join(' ') + ' ';
+
+            // Přidat souřadnice
+            interpreted += `X${this.absolutePosition.X.toFixed(3)} Z${this.absolutePosition.Z.toFixed(3)}`;
+
+            // Přidat CR pokud existuje
+            if (crMatch) interpreted += ` CR=${crMatch[1]}`;
+
+            // Přidat posuv
+            if (feedMatch) interpreted += ` F${feedMatch[1]}`;
+
+            // Přidat otáčky
+            if (speedMatch) interpreted += ` S=${speedMatch[1]}`;
+
+            // Přidat M-funkce
+            if (mCodes.length > 0) interpreted += ` ${mCodes.join(' ')}`;
+
+            return {
+                X: this.absolutePosition.X,
+                Z: this.absolutePosition.Z,
+                interpreted: interpreted
+            };
+
         } catch (error) {
             console.error('Chyba parsování:', line, error);
             return null;
