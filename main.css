@@ -171,6 +171,17 @@
     .file-input {
         display: none;
     }
+    .file-icon.json-icon {
+        border-color: #60a5fa;
+        background-color: #eff6ff;
+    }
+    .file-icon.json-icon:hover {
+        background-color: #dbeafe;
+        border-color: #3b82f6;
+    }
+    .file-icon.json-icon svg {
+        color: #3b82f6;
+    }
     .side-panel {
         position: fixed;
         top: 0;
@@ -218,17 +229,6 @@
         top: 0;
         left: 0;
         width: 100%;
-<<<<<<< HEAD
-        background-color: white;
-        z-index: 1001;
-        transform: translateY(-100%); /* Skrýt panel posunutím nahoru */
-        transition: transform 0.3s ease-in-out;
-        min-height: 45px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    .top-panel.open {
-        transform: translateY(0); /* Zobrazit panel */
-=======
         height: auto;
         background-color: white;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -240,7 +240,6 @@
     }
     .top-panel.open {
         transform: translateY(0);
->>>>>>> b44715124eddb1dd3105908983a45662c06629b7
     }
     .program-list {
         display: flex;
