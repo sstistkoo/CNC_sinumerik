@@ -418,12 +418,30 @@ function addLineHighlight(textarea, lineNumber) {
     textarea.parentElement.appendChild(highlightElement);
 }
 
+function getActualLinePosition(textarea, targetLineNumber) {
+    const lines = textarea.value.split('\n');
+    let actualPosition = 0;
+    let currentLine = 0;
+
+    for (let i = 0; i < lines.length && currentLine < targetLineNumber; i++) {
+        actualPosition++;
+        if (!lines[i].trim().startsWith('; →')) {
+            currentLine++;
+        }
+    }
+    return actualPosition;
+}
+
 function scrollToLine(textarea, lineNumber, forceCenter = false) {
     // Centrovat v parseru a také když je vyžádáno force center
     if (textarea === parserTextarea || forceCenter) {
-        const lineHeight = 24;
+        const lineHeight = 24; // výška řádku v pixelech
         const paddingTop = parseFloat(getComputedStyle(textarea).paddingTop);
-        const targetPosition = (lineNumber - 1) * lineHeight + paddingTop;
+
+        // Získat skutečnou pozici řádku včetně interpretovaných řádků
+        const actualPosition = getActualLinePosition(textarea, lineNumber);
+
+        const targetPosition = (actualPosition - 1) * lineHeight + paddingTop;
         const centerOffset = (textarea.clientHeight - lineHeight) / 2;
         textarea.scrollTop = targetPosition - centerOffset;
     }

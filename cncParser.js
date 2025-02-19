@@ -18,73 +18,43 @@ export class CNCParser {
         const lines = programText.split('\n');
         const result = [];
 
-        // Najít a zpracovat L105
+        // Najít L105 a jeho parametry, ale zatím je neukládat
         const l105Index = lines.findIndex(line => line.includes('L105'));
+        let l105Params = [];
         if (l105Index !== -1) {
             console.log('🔍 Nalezen L105 na řádku:', l105Index + 1);
             const l105Text = lines.slice(l105Index).join('\n');
             console.log('Zpracovávám L105...');
-            const params = this.rParameters?.parseL105(l105Text);
-            if (params?.length) {
-                console.log('Načtené parametry:', params);
-                // Přidat interpretované řádky s hodnotami parametrů
-                result.push({
-                    lineNumber: l105Index + 1,
-                    originalLine: lines[l105Index],
-                    type: 'original'
-                });
-                params.forEach(p => {
+            if (this.rParameters?.parseL105(l105Text)) {
+                l105Params = this.rParameters.getAll();
+                console.log('Načtené parametry:', l105Params);
+            }
+        }
+
+        // Zpracovat všechny řádky
+        lines.forEach((line, index) => {
+            const trimmedLine = line.trim();
+
+            // Standardní řádek
+            result.push({
+                lineNumber: index + 1,
+                originalLine: line,
+                type: 'original'
+            });
+
+            // Pro L105 přidat parametry až když se k němu dostaneme
+            if (trimmedLine.includes('L105')) {
+                // Přidat interpretované parametry
+                l105Params.forEach(p => {
                     result.push({
-                        lineNumber: l105Index + 1,
+                        lineNumber: index + 1,
                         originalLine: `    ; → R${p.num} = ${p.value.toFixed(3)}`,
                         type: 'interpreted'
                     });
                 });
             }
-        }
-
-        let inL105 = false;
-
-        lines.forEach((line, index) => {
-            const trimmedLine = line.trim();
-
-            // Detekce L105
-            if (trimmedLine.includes('L105')) {
-                inL105 = true;
-            }
-
-            // Zpracování R-parametrů v L105
-            if (inL105 && /R\d+=/.test(trimmedLine) && !trimmedLine.startsWith(';')) {
-                const rAssignments = trimmedLine.match(/R\d+=[-\d.+\/*\s()]+/g);
-                result.push({
-                    lineNumber: index + 1,
-                    originalLine: trimmedLine,
-                    type: 'original'
-                });
-
-                if (rAssignments) {
-                    rAssignments.forEach(assignment => {
-                        const [param, expr] = assignment.split('=');
-                        const value = this.evaluateExpression(expr);
-                        result.push({
-                            lineNumber: index + 1,
-                            originalLine: `    ; → ${param} = ${value.toFixed(3)}`,
-                            type: 'interpreted'
-                        });
-                    });
-                }
-                return;
-            }
-
-            // Standardní řádek
-            result.push({
-                lineNumber: index + 1,
-                originalLine: trimmedLine,
-                type: 'original'
-            });
-
             // Zpracování pohybových příkazů
-            if (this.hasCoordinates(trimmedLine)) {
+            else if (this.hasCoordinates(trimmedLine)) {
                 const coords = this.parseMotion(trimmedLine);
                 if (coords) {
                     result.push({
