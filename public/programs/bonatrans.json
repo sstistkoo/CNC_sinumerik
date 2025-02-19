@@ -1,0 +1,33 @@
+{
+  "name": "BONATRANS 920+4",
+  "type": "turning",
+  "mainProgram": {
+    "name": "MPF_K1_03_4431.MPF",
+    "code": [
+      "MSG(\"1.OP. 920+4-BONATRANS,vykres.03_4431 \" )",
+      "; TP.163.1.211.000.05",
+      "N00 GOTOF PROGR",
+      "; 31.10.2012,HLAVNI PROG.KOLA S HRUB.OTVOREM V NABOJI",
+      "; POSLEDNI UPRAVA 5.5.2023",
+      "PROGR:",
+      "N01 G95 G54 D0",
+      "N02 L105  ;NACTENI PARAMETRU",
+      "N03 STOPRE",
+      "N04 M80",
+      "N05 GOTOF SKOK50  ;ROZHODUJE O POCATKU/ DILEC OPRACOVANI"
+    ]
+  },
+  "subprograms": {
+    "L49": {
+      "code": [
+        ";-------------------------------------",
+        "MSG(\"OPRACOVANI DRAZKY SJETI NA CELE VENCE,D=850-2\")",
+        "N01 M41",
+        "N02 STOPRE",
+        "N03 M80",
+        "N04 G54 G95",
+        "N05 M4 S=70"
+      ]
+    }
+  }
+}

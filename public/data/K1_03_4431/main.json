@@ -1,0 +1,18 @@
+{
+  "name": "MPF_K1_03_4431.MPF",
+  "type": "MPF",
+  "description": "Program pro soustružení kola s hrubým otvorem v náboji",
+  "code": [
+    "MSG(\"1.OP. 920+4-BONATRANS,vykres.03_4431 \" )",
+    "; TP.163.1.211.000.05",
+    "N00 GOTOF PROGR",
+    "; 31.10.2012,HLAVNI PROG.KOLA S HRUB.OTVOREM V NABOJI",
+    "; POSLEDNI UPRAVA 5.5.2023",
+    "PROGR:",
+    "N01 G95 G54 D0",
+    "N02 L105  ;NACTENI PARAMETRU",
+    "N03 STOPRE",
+    "N04 M80",
+    "N05 GOTOF SKOK50  ;ROZHODUJE O POCATKU/ DILEC OPRACOVANI"
+  ]
+}

@@ -28,17 +28,44 @@
         <div id="topEditor" class="editor">
             <div class="editor-label">Prog.</div>
             <div class="line-numbers" id="parserLineNumbers"></div>
-            <textarea placeholder="Parser rozparsované řádky..." readonly></textarea>
+            <textarea
+                placeholder="Parser rozparsované řádky..."
+                style="white-space: pre-wrap; tab-size: 4; overflow-x: hidden; word-wrap: normal;"
+            ></textarea>
         </div>
 
         <div id="middleWindow" class="middle-window">
             <div class="middle-content">
                 <button id="lpButton" class="square-button">LP</button>
+
                 <div class="file-icon" onclick="document.getElementById('fileInput').click()">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
                     </svg>
+                    <span>Načíst</span>
                 </div>
+
+                <div id="saveCncButton" class="file-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+                    </svg>
+                    <span>Uložit</span>
+                </div>
+
+                <div id="loadButton" class="file-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                    <span>Load</span>
+                </div>
+
+                <div id="saveButton" class="file-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+                    </svg>
+                    <span>Save</span>
+                </div>
+
                 <button id="ppButton" class="square-button">PP</button>
                 <input type="file" id="fileInput" class="file-input" accept=".mpf,.spf,.nc,.cnc" multiple />
             </div>
@@ -47,7 +74,10 @@
         <div id="bottomEditor" class="editor">
             <div class="editor-label" id="editorHandle">Menu</div>
             <div class="line-numbers" id="editorLineNumbers"></div>
-            <textarea placeholder="Editor CNC kód..."></textarea>
+            <textarea
+                placeholder="Editor CNC kód..."
+                style="white-space: pre-wrap; tab-size: 4; overflow-x: hidden; word-wrap: normal;"
+            ></textarea>
         </div>
     </div>
 

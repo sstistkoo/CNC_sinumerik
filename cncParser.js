@@ -33,7 +33,7 @@ export class CNCParser {
     }
 
     getFormattedBlock(block) {
-        // Vrátit přesně původní řádek bez úprav
+        // Vrátit přesně původní řádek bez jakýchkoliv úprav
         return block.originalLine;
     }
 }

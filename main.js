@@ -29,6 +29,22 @@ const cncParser = new CNCParser();
 const parserLineNumbers = document.getElementById('parserLineNumbers');
 const editorLineNumbers = document.getElementById('editorLineNumbers');
 
+// Přidat nové konstanty pro tlačítka
+const loadButton = document.getElementById('loadButton');
+const saveButton = document.getElementById('saveButton');
+
+// Přidat po deklaraci konstant
+const programBackups = new Map(); // Nová mapa pro zálohy kódu
+
+function backupProgram(name, code) {
+    if (!name) return;
+    programBackups.set(name, Array.isArray(code) ? code : code.split('\n'));
+}
+
+function restoreProgram(name) {
+    return programBackups.get(name) || [];
+}
+
 // Opravit funkci updateHeights
 function updateHeights() {
     const middleHeight = isMiddleOpen ? MIDDLE_HEIGHT : 0; // Změna z 1 na 0
@@ -128,24 +144,34 @@ document.addEventListener('mouseup', () => {
     }
 });
 
+// Upravit funkci adjustHeightsForTopPanel pro menší výšku
 function adjustHeightsForTopPanel(isOpen) {
     if (isOpen) {
         originalTopHeight = topHeight;
         originalBottomHeight = bottomHeight;
         const programList = document.getElementById('programList');
         const items = programList.children;
+
         // Konstanty pro výpočet výšky
-        const controlsHeight = 45; // Výška panelu s ovládacími prvky
-        const itemPadding = 10;    // Padding pro položky
-        // Výpočet skutečné šířky dostupné pro položky
-        const availableWidth = window.innerWidth - 150; // Odečteme prostor pro controls
-        const itemWidth = 150;      // Přibližná šířka jedné položky
+        const controlsHeight = 45; // Základní výška panelu
+        const itemHeight = 35;     // Výška jednoho programu
+        const padding = 10;        // Padding
+
+        // Výpočet řádků
+        const availableWidth = window.innerWidth - 150;
+        const itemWidth = 150;
         const itemsPerRow = Math.floor(availableWidth / itemWidth);
         const rows = Math.ceil(items.length / itemsPerRow) || 1;
-        // Vypočítáme celkovou výšku - pokud je jeden řádek, použijeme controlsHeight
-        const panelHeight = rows === 1 ? controlsHeight : controlsHeight * rows;
+
+        // Nová výška panelu - max 2 řádky
+        const maxRows = 2;
+        const actualRows = Math.min(rows, maxRows);
+        const panelHeight = controlsHeight + (actualRows > 1 ? (itemHeight + padding) : 0);
+
         topPanel.style.height = `${panelHeight}px`;
         container.style.marginTop = `${panelHeight}px`;
+
+        // Přepočet výšek editorů
         const reduction = (panelHeight / window.innerHeight) * 100;
         const ratio = topHeight / (topHeight + bottomHeight);
         const availableSpace = 100 - reduction;
@@ -157,6 +183,8 @@ function adjustHeightsForTopPanel(isOpen) {
             bottomHeight = originalBottomHeight;
         }
         container.style.marginTop = '0';
+        // Odstranit visibility property
+        topPanel.style.removeProperty('visibility');
     }
     updateHeights();
 }
@@ -199,36 +227,77 @@ freezeButton.addEventListener('click', () => {
     freezeButton.classList.toggle('active');
 });
 
-function processAndDisplayCode(programText) {
-    editorTextarea.value = programText;
-    const parsedBlocks = cncParser.parseProgram(programText);
+// Upravit funkci processAndDisplayCode
+function processAndDisplayCode(programText, programName) {
+    // Nejdřív uložit aktuální obsah
+    if (activeProgram) {
+        const currentCode = editorTextarea.value.split('\n');
+        programCodes.set(activeProgram.textContent, currentCode);
+        console.debug('Ukládám kód programu:', activeProgram.textContent, currentCode.length);
+    }
 
-    // Zachovat přesně stejný text v obou oknech
-    parserTextarea.value = programText;
+    // Zpracovat nový kód
+    let text = '';
+    if (Array.isArray(programText)) {
+        text = programText.join('\n');
+    } else if (typeof programText === 'string') {
+        text = programText;
+    }
+
+    // Uložit nový kód
+    if (programName) {
+        const code = text.split('\n');
+        programCodes.set(programName, code);
+        console.debug('Nastavuji kód programu:', programName, code.length);
+    }
+
+    // Zobrazit kód
+    parserTextarea.value = text;
+    editorTextarea.value = text;
 
     updateLineNumbers(editorTextarea, editorLineNumbers);
     updateLineNumbers(parserTextarea, parserLineNumbers);
 }
 
-// Opravit event listener pro soubory
+// Upravit načítání souborů
 fileInput.addEventListener('change', (e) => {
     const files = Array.from(e.target.files);
     const programList = document.getElementById('programList');
     programList.innerHTML = '';
+    programStorage.clear();
+
+    console.log('Načítání CNC souborů:', files.map(f => f.name).join(', '));
 
     files.forEach(file => {
         const ext = file.name.split('.').pop().toLowerCase();
         if (['mpf', 'spf', 'nc', 'cnc'].includes(ext)) {
-            const programItem = document.createElement('div');
-            programItem.className = 'program-item';
-            programItem.textContent = file.name;
-
             const reader = new FileReader();
             reader.onload = function(event) {
                 const content = event.target.result;
+                const lines = content.split('\n');
+                console.log(`Načítám program ${file.name}:`, lines.length, 'řádků');
+
+                // Uložit program do úložiště
+                programStorage.save(file.name, lines);
+
+                // Vytvořit DOM element
+                const programItem = document.createElement('div');
+                programItem.className = 'program-item';
+                programItem.textContent = file.name;
+
                 programItem.onclick = () => {
-                    editorTextarea.value = content;
-                    parserTextarea.value = content;
+                    // Uložit aktuální program před přepnutím
+                    if (activeProgram) {
+                        const currentCode = editorTextarea.value.split('\n');
+                        programStorage.save(activeProgram.textContent, currentCode);
+                    }
+
+                    // Načíst nový program
+                    const code = programStorage.load(file.name);
+                    const text = code.join('\n');
+
+                    editorTextarea.value = text;
+                    parserTextarea.value = text;
 
                     updateLineNumbers(editorTextarea, editorLineNumbers);
                     updateLineNumbers(parserTextarea, parserLineNumbers);
@@ -243,10 +312,15 @@ fileInput.addEventListener('change', (e) => {
                         toggleTopPanel();
                     }
                 };
+
+                programList.appendChild(programItem);
+
+                // Aktivovat první program po načtení
+                if (programList.children.length === 1) {
+                    programItem.click();
+                }
             };
             reader.readAsText(file);
-
-            programList.appendChild(programItem);
         }
     });
 
@@ -404,17 +478,28 @@ window.addEventListener('resize', () => {
 
 window.addEventListener('resize', updateHeights);
 
+// Upravit event listenery v DOMContentLoaded
 document.addEventListener('DOMContentLoaded', function() {
     // Přidat event listener na editor-label pro otevření horního panelu
     const editorLabel = document.querySelector('.editor-label');
     if (editorLabel) {
-        editorLabel.addEventListener('click', toggleTopPanel);
+        editorLabel.addEventListener('click', () => {
+            // Přepínat třídu open místo visibility
+            const isOpen = topPanel.classList.toggle('open');
+            adjustHeightsForTopPanel(isOpen);
+        });
     }
 
     // Přidat event listener na close button v horním panelu
     const topPanelCloseBtn = topPanel.querySelector('.close-button');
     if (topPanelCloseBtn) {
-        topPanelCloseBtn.addEventListener('click', toggleTopPanel);
+        topPanelCloseBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // Zavřít panel stejným způsobem jako tlačítko Prog.
+            topPanel.classList.remove('open');
+            adjustHeightsForTopPanel(false);
+        });
     }
 
     // Přidat event listenery pro zavírací tlačítka bočních panelů
@@ -432,6 +517,320 @@ document.addEventListener('DOMContentLoaded', function() {
     // Inicializovat číslování řádků
     updateLineNumbers(editorTextarea, editorLineNumbers);
     updateLineNumbers(parserTextarea, parserLineNumbers);
+
+    // Zavolat načtení programů
+    loadDefaultProgram();
+});
+
+async function loadDefaultProgram() {
+    try {
+        console.log('Načítám programy...');
+
+        const response = await fetch('data/K1_03_4431.json');
+        const fullProgram = await response.json();
+        await loadProgramsFromJSON(fullProgram);
+
+    } catch (error) {
+        console.error('Chyba při načítání programů:', error);
+    }
+}
+
+// Přepsat původní funkci loadProgramsFromJSON
+async function loadProgramsFromJSON(data) {
+    try {
+        console.log('Načítání programů z JSON...');
+
+        if (!data?.programs?.length) {
+            throw new Error('JSON neobsahuje žádné programy');
+        }
+
+        // Vyčistit seznam a úložiště
+        const programList = document.getElementById('programList');
+        programList.innerHTML = '';
+        programStorage.clear();
+
+        // Nejdřív načteme všechny programy do úložiště
+        data.programs.forEach(program => {
+            const { name, code } = program;
+            if (!name || !code) return;
+
+            programStorage.save(name, code);
+        });
+
+        // Pak vytvoříme DOM elementy
+        data.programs.forEach(program => {
+            const { name } = program;
+            if (!name) return;
+
+            const item = document.createElement('div');
+            item.className = 'program-item';
+            item.textContent = name;
+            item.onclick = createProgramClickHandler(item, program);
+
+            programList.appendChild(item);
+        });
+
+        // Aktivovat první program
+        const firstProgram = programList.querySelector('.program-item');
+        if (firstProgram) {
+            firstProgram.click();
+        }
+
+        topPanel.classList.add('open');
+        adjustHeightsForTopPanel(true);
+
+    } catch (error) {
+        console.error('Chyba při načítání:', error);
+    }
+}
+
+// Přepsat původní funkci pro ukládání
+function saveProgramsToJSON() {
+    try {
+        // Uložit aktuální program
+        if (activeProgram) {
+            programStorage.save(
+                activeProgram.textContent,
+                editorTextarea.value
+            );
+        }
+
+        // Vytvořit pole programů
+        const programList = document.getElementById('programList');
+        const programs = Array.from(programList.children).map(item => {
+            const name = item.textContent;
+            const code = programStorage.load(name);
+
+            return {
+                name: name,
+                type: name.split('.').pop().toUpperCase(),
+                description: `${name.endsWith('.MPF') ? 'Hlavní program' : 'Podprogram'} ${name}`,
+                code: code
+            };
+        });
+
+        // Debug výpis
+        console.log('Programy k uložení:', programs.map(p => ({
+            name: p.name,
+            lines: p.code.length
+        })));
+
+        // Najít hlavní program
+        const mainProgram = programs.find(p => p.name.endsWith('.MPF'));
+        if (!mainProgram) throw new Error('Nenalezen hlavní program (*.MPF)');
+
+        // Sestavit JSON
+        const jsonData = {
+            name: mainProgram.name.split('.')[0].replace(/^MPF_/, ''),
+            description: "Kompletní program pro obrábění",
+            programs: programs
+        };
+
+        // Uložit soubor
+        const blob = new Blob([JSON.stringify(jsonData, null, 2)],
+            { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${jsonData.name}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+    } catch (error) {
+        console.error('Chyba při ukládání:', error);
+    }
+}
+
+// Jednoduché úložiště pro kódy programů
+const programStorage = {
+    programs: new Map(),
+
+    save(name, code) {
+        if (!name) return;
+        const lines = Array.isArray(code) ? [...code] :
+                     typeof code === 'string' ? code.split('\n') : [];
+        console.log(`Ukládám program ${name}:`, lines.length, 'řádků');
+        this.programs.set(name, lines);
+    },
+
+    load(name) {
+        const code = this.programs.get(name);
+        console.log(`Načítám program ${name}:`, code?.length || 0, 'řádků');
+        return code || [];
+    },
+
+    clear() {
+        this.programs.clear();
+        console.log('Úložiště vyčištěno');
+    }
+};
+
+updateHeights();
+
+// Nejprve odebrat všechny staré event listenery
+document.getElementById('saveButton').removeEventListener('click', saveProgramsToJSON);
+
+// Přidáme nový event listener na kliknutí na saveButton element (ne jQuery)
+document.getElementById('saveButton').addEventListener('click', (e) => {
+    e.preventDefault();
+    console.log('Save button clicked!');
+
+    try {
+        // Uložit aktuální program
+        if (activeProgram) {
+            const currentCode = editorTextarea.value.split('\n');
+            programStorage.save(activeProgram.textContent, currentCode);
+        }
+
+        // Získat všechny programy
+        const programList = document.getElementById('programList');
+        const programs = Array.from(programList.children).map(item => {
+            const name = item.textContent;
+            const code = programStorage.load(name);
+
+            return {
+                name: name,
+                type: name.split('.').pop().toUpperCase(),
+                description: `${name.endsWith('.MPF') ? 'Hlavní program' : 'Podprogram'} ${name}`,
+                code: code
+            };
+        });
+
+        // Debug výpis
+        programs.forEach(p => {
+            console.log(`Program ${p.name}:`, p.code.length, 'řádků');
+        });
+
+        // Vytvořit a uložit JSON
+        const mainProgram = programs.find(p => p.name.endsWith('.MPF'));
+        if (!mainProgram) throw new Error('Nenalezen hlavní program (*.MPF)');
+
+        const jsonData = {
+            name: mainProgram.name.split('.')[0].replace(/^MPF_/, ''),
+            description: "Kompletní program pro obrábění",
+            programs: programs
+        };
+
+        const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${jsonData.name}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        console.log('Soubor uložen:', jsonData.name, 'programů:', programs.length);
+
+    } catch (error) {
+        console.error('Chyba při ukládání:', error);
+    }
+});
+
+updateHeights();
+
+// Přidat event listenery pro nová tlačítka
+loadButton.addEventListener('click', async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                try {
+                    const programData = JSON.parse(event.target.result);
+                    await loadProgramsFromJSON(programData);
+                } catch (error) {
+                    console.error('Chyba při načítání programů:', error);
+                }
+            };
+            reader.readAsText(file);
+        }
+    };
+
+    input.click();
+});
+
+// Přidat globální proměnné pro ukládání kódů
+const programCodes = new Map();
+
+updateHeights();
+
+// Upravit click handler pro program items
+function createProgramClickHandler(item, program) {
+    return () => {
+        // Uložit aktuální program před přepnutím
+        if (activeProgram) {
+            const currentCode = editorTextarea.value.split('\n');
+            programStorage.save(activeProgram.textContent, currentCode);
+        }
+
+        // Načíst nový program
+        const code = programStorage.load(program.name);
+        console.log(`Načítám program ${program.name}:`, code.length, 'řádků');
+
+        editorTextarea.value = code.join('\n');
+        parserTextarea.value = code.join('\n');
+
+        updateLineNumbers(editorTextarea, editorLineNumbers);
+        updateLineNumbers(parserTextarea, parserLineNumbers);
+
+        // Aktualizovat aktivní program
+        document.querySelectorAll('.program-item').forEach(p =>
+            p.classList.remove('active')
+        );
+        item.classList.add('active');
+        activeProgram = item;
+
+        // Skrýt panel pouze pokud není zamrzlý
+        if (!isPanelFrozen) {
+            toggleTopPanel(); // Vráceno zpět na toggleTopPanel místo visibility
+        }
+    };
+}
+
+// Přidat novou funkci pro ukládání CNC souboru
+function saveCncFile(type = 'MPF') {
+    if (!activeProgram) {
+        console.warn('Není vybrán žádný program k uložení');
+        return;
+    }
+
+    const code = editorTextarea.value;
+    const originalName = activeProgram.textContent;
+    const baseName = originalName.split('.')[0].replace(/^MPF_/, '');
+
+    // Vytvořit název souboru podle typu
+    const fileName = type === 'MPF' ?
+        `MPF_${baseName}.MPF` :
+        `${baseName}.SPF`;
+
+    // Vytvořit a stáhnout soubor
+    const blob = new Blob([code], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    console.log(`Uložen CNC soubor: ${fileName}`);
+}
+
+// Přidat event listener pro ukládání CNC souboru
+document.getElementById('saveCncButton').addEventListener('click', () => {
+    // Zobrazit dialog pro výběr typu souboru
+    const type = confirm('Uložit jako hlavní program (OK) nebo podprogram (Cancel)?') ?
+        'MPF' : 'SPF';
+    saveCncFile(type);
 });
 
 updateHeights();

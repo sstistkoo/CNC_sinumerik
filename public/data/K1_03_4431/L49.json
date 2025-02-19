@@ -1,0 +1,18 @@
+{
+  "name": "L49",
+  "type": "SPF",
+  "description": "Program drážky sjetí na čele věnce",
+  "code": [
+    ";-------------------------------------",
+    "MSG(\"OPRACOVANI DRAZKY SJETI NA CELE VENCE,D=850-2\")",
+    "N01 M41",
+    "N02 STOPRE",
+    "N03 M80",
+    "N04 G54 G95",
+    "N05 M4 S=70",
+    "N06 L105",
+    "N07 STOPRE",
+    "N08 T2",
+    "N430 M17"
+  ]
+}
