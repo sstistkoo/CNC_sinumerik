@@ -10,7 +10,9 @@ export class CNCParser {
         this.currentPosition = { X: 0, Z: 0 };
         this.absolutePosition = { X: 0, Z: 0 };
         this.activeMotion = 'G90';
-        this.lastGCode = '1';
+        this.lastGCode = 'G1';
+        this.modalG = 'G1';
+        this.debug = true;  // Pro sledování výpočtů
     }
 
     async parseProgram(programText) {
@@ -81,61 +83,67 @@ export class CNCParser {
 
     hasCoordinates(line) {
         const trimmedLine = line.trim();
-        return (line.includes('G0') || line.includes('G1') ||
-                line.includes('G2') || line.includes('G3')) &&
-               (/[XZ]=?[-\d.()\s+R\d+*/]+/.test(trimmedLine)) &&
-               !/^;/.test(trimmedLine) &&
-               !/MSG/.test(trimmedLine);
+
+        // Kontrola zda není komentář nebo MSG
+        if (/^;/.test(trimmedLine) || /MSG/.test(trimmedLine)) {
+            return false;
+        }
+
+        // Vylepšená detekce souřadnic - zachytí všechny formáty
+        return (
+            // Standardní G-kód s koordináty
+            /G[0123].*[XZ]/.test(trimmedLine) ||
+            // Samostatné X/Z souřadnice na začátku řádku
+            /^[XZ][-\d.]+/.test(trimmedLine) ||
+            // X/Z s výrazem nebo R-parametrem
+            /[XZ]\s*=?\s*[-\d.R()+\/*\s]+/.test(trimmedLine)
+        );
     }
 
     parseMotion(line) {
         try {
-            // Detekce G90/G91
-            if (line.includes('G90')) this.activeMotion = 'G90';
-            if (line.includes('G91')) this.activeMotion = 'G91';
-
-            // Extrakce souřadnic
-            const xMatch = line.match(/X\s*=?\s*([-()\d.+\/*\sR\d]+)/);
-            const zMatch = line.match(/Z\s*=?\s*([-()\d.+\/*\sR\d]+)/);
-
-            // Uchovat předchozí pozice
+            // Zachovat předchozí pozice
             const prevX = this.currentPosition.X;
             const prevZ = this.currentPosition.Z;
 
-            // Pomocná funkce pro vyhodnocení výrazu s čištěním
-            const evalCoord = (expr) => {
-                if (!expr) return null;
-                const cleaned = expr.replace(/^\((.*)\)$/, '$1'); // odstranit závorky
-                return this.evaluateExpression(cleaned);
-            };
+            // Aktualizace G kódů
+            const gMatch = line.match(/G([0123])/);
+            if (gMatch) {
+                this.lastGCode = `G${gMatch[1]}`;
+            }
+            if (line.includes('G90')) this.activeMotion = 'G90';
+            if (line.includes('G91')) this.activeMotion = 'G91';
 
-            // Vypočítat nové pozice
+            // Extrakce souřadnic s lepší detekcí
+            const xMatch = line.match(/X\s*=?\s*([-\d.R()+\/*\s]+)/);
+            const zMatch = line.match(/Z\s*=?\s*([-\d.R()+\/*\s]+)/);
+
+            // Výpočet nových pozic
             let newX = prevX;
             let newZ = prevZ;
 
+            // Zpracování podle G90/G91 módu
             if (xMatch) {
-                const xValue = evalCoord(xMatch[1]);
-                if (xValue !== null) {
-                    newX = this.activeMotion === 'G90' ? xValue : prevX + xValue;
-                }
+                const xValue = this.evaluateExpression(xMatch[1]);
+                newX = this.activeMotion === 'G90' ? xValue : prevX + xValue;
             }
-
             if (zMatch) {
-                const zValue = evalCoord(zMatch[1]);
-                if (zValue !== null) {
-                    newZ = this.activeMotion === 'G90' ? zValue : prevZ + zValue;
-                }
+                const zValue = this.evaluateExpression(zMatch[1]);
+                newZ = this.activeMotion === 'G91' ? prevZ + zValue : zValue;
             }
 
-            // Uložit nové pozice
+            // Debug výpis
+            console.log(`Řádek: ${line}`);
+            console.log(`Mód: ${this.activeMotion}, G: ${this.lastGCode}`);
+            console.log(`Předchozí: X${prevX.toFixed(3)} Z${prevZ.toFixed(3)}`);
+            console.log(`Delta: X${xMatch ? this.evaluateExpression(xMatch[1]).toFixed(3) : 'none'} Z${zMatch ? this.evaluateExpression(zMatch[1]).toFixed(3) : 'none'}`);
+            console.log(`Nové: X${newX.toFixed(3)} Z${newZ.toFixed(3)}`);
+
+            // Aktualizace pozic
             this.currentPosition = { X: newX, Z: newZ };
             this.absolutePosition = { X: newX, Z: newZ };
 
-            // Debug log
-            console.log(`Pohyb ${this.activeMotion}: ${line.trim()} -> X${newX.toFixed(3)} Z${newZ.toFixed(3)}`);
-
             return this.absolutePosition;
-
         } catch (error) {
             console.error('Chyba parsování:', line, error);
             return null;
