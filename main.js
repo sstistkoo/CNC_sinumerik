@@ -364,24 +364,19 @@ editorTextarea.addEventListener('input', () => {
 // Funkce pro aktualizaci čísel řádků
 function updateLineNumbers(textarea, numberContainer) {
     const lines = textarea.value.split('\n');
-    const editorLines = textarea === editorTextarea ?
-        lines :
-        lines.filter(line => !line.trim().startsWith('; →'));
-
+    const lineCount = lines.length;
     const numbers = [];
-    let editorLineNumber = 1;
 
-    lines.forEach((line) => {
-        const isInterpretedLine = line.trim().startsWith('; →');
-        if (textarea === parserTextarea && isInterpretedLine) {
-            // Interpretované řádky bez čísel
+    for (let i = 0; i < lineCount; i++) {
+        const line = lines[i];
+        if (textarea === parserTextarea && line.startsWith('    ;')) {
+            // Pro interpretované řádky v parseru přidat prázdný řádek
             numbers.push('<div class="line-number empty"></div>');
         } else {
-            // Původní řádky s čísly
-            numbers.push(`<div data-line="${editorLineNumber}" class="line-number">${editorLineNumber}</div>`);
-            editorLineNumber++;
+            // Pro ostatní řádky přidat číslo
+            numbers.push(`<div data-line="${i + 1}" class="line-number">${i + 1}</div>`);
         }
-    });
+    }
 
     numberContainer.innerHTML = numbers.join('');
     const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight);
@@ -428,36 +423,14 @@ function addLineHighlight(textarea, lineNumber) {
 }
 
 function scrollToLine(textarea, lineNumber, forceCenter = false) {
-    const lines = textarea.value.split('\n');
-
-    // Vypočítat skutečnou pozici řádku (přeskočit interpretované řádky)
-    let actualPosition = 0;
-    let targetLineIndex = 0;
-
-    if (textarea === parserTextarea) {
-        let originalLineCount = 0;
-        for (let i = 0; i < lines.length; i++) {
-            if (!lines[i].trim().startsWith('; →')) {
-                originalLineCount++;
-                if (originalLineCount === lineNumber) {
-                    targetLineIndex = i;
-                    break;
-                }
-            }
-            actualPosition += 24; // Výška řádku
-        }
-    } else {
-        targetLineIndex = lineNumber - 1;
-        actualPosition = targetLineIndex * 24;
+    // Centrovat v parseru a také když je vyžádáno force center
+    if (textarea === parserTextarea || forceCenter) {
+        const lineHeight = 24;
+        const paddingTop = parseFloat(getComputedStyle(textarea).paddingTop);
+        const targetPosition = (lineNumber - 1) * lineHeight + paddingTop;
+        const centerOffset = (textarea.clientHeight - lineHeight) / 2;
+        textarea.scrollTop = targetPosition - centerOffset;
     }
-
-    const lineHeight = 24;
-    const paddingTop = parseFloat(getComputedStyle(textarea).paddingTop);
-
-    // Centrovat na skutečnou pozici řádku
-    const targetPosition = actualPosition + paddingTop;
-    const centerOffset = (textarea.clientHeight - lineHeight) / 2;
-    textarea.scrollTop = targetPosition - centerOffset;
 }
 
 // Upravit funkci synchronizeLines
@@ -973,138 +946,43 @@ document.getElementById('saveCncButton').addEventListener('click', () => {
 
 updateHeights();
 
-// Přidat tlačítko R do horního panelu po debugButton
-document.querySelector('.top-panel-controls').insertAdjacentHTML('beforeend', `
-    <button id="rParamsButton" class="square-button" title="R-Parameters">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 6h16l-8 12-8-12z"/>
-            <text x="8" y="14" fill="currentColor" style="font: bold 12px sans-serif;">R</text>
-        </svg>
-    </button>
-    <div id="rParamsPanel" class="r-params-panel hidden">
-        <div class="r-params-header">
-            <span>R-Parametry</span>
-            <button class="close-button">×</button>
-        </div>
-        <div class="r-params-content"></div>
-    </div>
-`);
+/* ...existing code... */
 
-// Přidat handler pro R-parametry
+// Upravit event listener pro R tlačítko
 document.getElementById('rParamsButton').addEventListener('click', () => {
+    const params = rParameters.getAll();
     const panel = document.getElementById('rParamsPanel');
+    const overlay = document.getElementById('rParamsOverlay');
     const content = panel.querySelector('.r-params-content');
 
-    // Aktualizovat obsah
-    const params = rParameters.getAll();
     content.innerHTML = params.map(p => `
         <div class="r-param-row">
             <span>R${p.num}</span>
             <span>${p.value.toFixed(3)}</span>
-            <span class="r-param-time">${new Date(p.lastModified).toLocaleTimeString()}</span>
         </div>
     `).join('');
 
-    panel.classList.toggle('hidden');
+    panel.classList.remove('hidden');
+    overlay.classList.add('visible');
 });
 
-// Přidat event listener pro R tlačítko
-document.getElementById('midRParamsButton').addEventListener('click', () => {
-    const panel = document.getElementById('middleRParamsPanel');
-    panel.classList.toggle('hidden');
+// Upravit event listener pro zavírání
+document.querySelector('#rParamsPanel .close-button').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const panel = document.getElementById('rParamsPanel');
+    const overlay = document.getElementById('rParamsOverlay');
+
+    panel.classList.add('hidden');
+    overlay.classList.remove('visible');
 });
 
-updateHeights();
+// Přidat event listener pro kliknutí na overlay
+document.getElementById('rParamsOverlay').addEventListener('click', () => {
+    const panel = document.getElementById('rParamsPanel');
+    const overlay = document.getElementById('rParamsOverlay');
 
-// Přidat správný event listener pro R tlačítko a jeho obsah
-document.addEventListener('DOMContentLoaded', () => {
-    const midRParamsButton = document.getElementById('midRParamsButton');
-    const paramsContent = midRParamsButton.querySelector('.middle-r-params');
-
-    // Click handler pro celou skupinu
-    midRParamsButton.addEventListener('click', (e) => {
-        // Aktualizovat obsah při každém kliknutí
-        const params = rParameters.getAll();
-        const content = paramsContent.querySelector('.r-params-content');
-
-        content.innerHTML = params.map(p => `
-            <div class="r-param-row">
-                <span>R${p.num}</span>
-                <span>${p.value.toFixed(3)}</span>
-            </div>
-        `).join('');
-
-        // Přepnout viditelnost
-        paramsContent.classList.toggle('hidden');
-    });
-
-    // Close button handler
-    const closeButton = paramsContent.querySelector('.close-button');
-    if (closeButton) {
-        closeButton.addEventListener('click', (e) => {
-            e.stopPropagation(); // Zabránit bublání události
-            paramsContent.classList.add('hidden');
-        });
-    }
+    panel.classList.add('hidden');
+    overlay.classList.remove('visible');
 });
 
 /* ...existing code... */
-
-// Odstranit původní handler pro horní R panel
-const topPanelControls = document.querySelector('.top-panel-controls');
-const rParamsButton = document.getElementById('rParamsButton');
-if (rParamsButton) {
-    rParamsButton.remove();
-}
-const rParamsPanel = document.getElementById('rParamsPanel');
-if (rParamsPanel) {
-    rParamsPanel.remove();
-}
-
-/* ...existing code... */
-
-// Odstranit původní duplicitní event listener
-document.getElementById('midRParamsButton').removeEventListener('click', () => {});
-
-// Přidat správný event listener pro R tlačítko a jeho obsah
-document.addEventListener('DOMContentLoaded', () => {
-    const midRParamsButton = document.getElementById('midRParamsButton');
-    const paramsContent = midRParamsButton.querySelector('.middle-r-params');
-
-    // Click handler pro celou skupinu
-    midRParamsButton.addEventListener('click', (e) => {
-        // Aktualizovat obsah při každém kliknutí
-        const params = rParameters.getAll();
-        const content = paramsContent.querySelector('.r-params-content');
-
-        content.innerHTML = params.map(p => `
-            <div class="r-param-row">
-                <span>R${p.num}</span>
-                <span>${p.value.toFixed(3)}</span>
-            </div>
-        `).join('');
-
-        // Přepnout viditelnost
-        paramsContent.classList.toggle('hidden');
-    });
-
-    // Close button handler
-    const closeButton = paramsContent.querySelector('.close-button');
-    if (closeButton) {
-        closeButton.addEventListener('click', (e) => {
-            e.stopPropagation(); // Zabránit bublání události
-            paramsContent.classList.add('hidden');
-        });
-    }
-});
-
-/* ...existing code... */
-
-// Přidat do CSS styly pro prázdné řádky
-document.head.insertAdjacentHTML('beforeend', `
-<style>
-.line-number.empty {
-    visibility: hidden;
-}
-</style>
-`);
