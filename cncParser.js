@@ -1,5 +1,6 @@
 export class CNCParser {
-    constructor() {
+    constructor(rParameters) {
+        this.rParameters = rParameters;
         this.reset();
     }
 
@@ -17,30 +18,78 @@ export class CNCParser {
         const lines = programText.split('\n');
         const result = [];
 
+        // Najít a zpracovat L105
+        const l105Index = lines.findIndex(line => line.includes('L105'));
+        if (l105Index !== -1) {
+            console.log('🔍 Nalezen L105 na řádku:', l105Index + 1);
+            const l105Text = lines.slice(l105Index).join('\n');
+            console.log('Zpracovávám L105...');
+            const params = this.rParameters?.parseL105(l105Text);
+            if (params?.length) {
+                console.log('Načtené parametry:', params);
+                // Přidat interpretované řádky s hodnotami parametrů
+                result.push({
+                    lineNumber: l105Index + 1,
+                    originalLine: lines[l105Index],
+                    type: 'original'
+                });
+                params.forEach(p => {
+                    result.push({
+                        lineNumber: l105Index + 1,
+                        originalLine: `    ; → R${p.num} = ${p.value.toFixed(3)}`,
+                        type: 'interpreted'
+                    });
+                });
+            }
+        }
+
+        let inL105 = false;
+
         lines.forEach((line, index) => {
             const trimmedLine = line.trim();
 
-            // Uložit původní řádek
+            // Detekce L105
+            if (trimmedLine.includes('L105')) {
+                inL105 = true;
+            }
+
+            // Zpracování R-parametrů v L105
+            if (inL105 && /R\d+=/.test(trimmedLine) && !trimmedLine.startsWith(';')) {
+                const rAssignments = trimmedLine.match(/R\d+=[-\d.+\/*\s()]+/g);
+                result.push({
+                    lineNumber: index + 1,
+                    originalLine: trimmedLine,
+                    type: 'original'
+                });
+
+                if (rAssignments) {
+                    rAssignments.forEach(assignment => {
+                        const [param, expr] = assignment.split('=');
+                        const value = this.evaluateExpression(expr);
+                        result.push({
+                            lineNumber: index + 1,
+                            originalLine: `    ; → ${param} = ${value.toFixed(3)}`,
+                            type: 'interpreted'
+                        });
+                    });
+                }
+                return;
+            }
+
+            // Standardní řádek
             result.push({
                 lineNumber: index + 1,
                 originalLine: trimmedLine,
                 type: 'original'
             });
 
-            // Zkontrolovat jestli řádek obsahuje pohyb
+            // Zpracování pohybových příkazů
             if (this.hasCoordinates(trimmedLine)) {
-                // Aktualizovat G-kód a mód
-                const gMatch = trimmedLine.match(/G([0-1])\s/);
-                if (gMatch) this.lastGCode = gMatch[1];
-                if (trimmedLine.includes('G90')) this.activeMotion = 'G90';
-                if (trimmedLine.includes('G91')) this.activeMotion = 'G91';
-
-                // Zpracovat souřadnice
                 const coords = this.parseMotion(trimmedLine);
                 if (coords) {
                     result.push({
                         lineNumber: index + 1,
-                        originalLine: `; → G90 G${this.lastGCode} X${this.absolutePosition.X.toFixed(3)} Z${this.absolutePosition.Z.toFixed(3)}`,
+                        originalLine: `    ; → X${coords.X.toFixed(3)} Z${coords.Z.toFixed(3)}`,
                         type: 'interpreted'
                     });
                 }
@@ -94,11 +143,16 @@ export class CNCParser {
     }
 
     evaluateExpression(expr) {
+        if (!expr) return 0;
         const cleanExpr = expr.replace(/\s+/g, '')
-                             .replace(/R(\d+)/g, (_, num) => this.getParameter(num));
+            .replace(/R(\d+)/g, (_, num) => {
+                const value = this.rParameters?.get(num) ?? this.getParameter(num);
+                return value.toString();
+            });
         try {
             return Function('"use strict";return (' + cleanExpr + ')')();
         } catch (error) {
+            console.error('Chyba při vyhodnocování výrazu:', expr, error);
             return 0;
         }
     }

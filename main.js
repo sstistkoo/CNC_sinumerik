@@ -1,4 +1,9 @@
 import { CNCParser } from './cncParser.js';
+import { RParameters } from './RParameters.js';  // Přidat import
+
+// Přidat na začátek souboru, před vytvoření CNCParser
+const rParameters = new RParameters();
+const cncParser = new CNCParser(rParameters);
 
 const container = document.querySelector('.container');
 const topEditor = document.getElementById('topEditor');
@@ -22,8 +27,6 @@ let topHeight = 49.5;
 let bottomHeight = 49.5;
 let originalTopHeight;
 let originalBottomHeight;
-
-const cncParser = new CNCParser();
 
 // Přidat nové konstanty pro číslování řádků
 const parserLineNumbers = document.getElementById('parserLineNumbers');
@@ -227,46 +230,13 @@ freezeButton.addEventListener('click', () => {
     freezeButton.classList.toggle('active');
 });
 
-// Přidat na začátek souboru po importech
-const DEBUG = {
-    enabled: true, // Výchozí hodnota na true
-    log(...args) {
-        if (this.enabled) {
-            if (typeof args[0] === 'string' && args[0].includes('→')) {
-                // Zvýraznit parsované řádky
-                console.log('%c' + args[0], 'color: #2563eb; font-weight: bold;');
-            } else {
-                console.log(...args);
-            }
-        }
-    }
-};
-
-// Přidat tlačítko pro debug do horního panelu
-document.querySelector('.top-panel-controls').insertAdjacentHTML('afterbegin', `
-    <button id="debugButton" class="square-button" title="Debug mode">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 19l7-7 3 3-7 7-3-3z"/>
-            <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
-            <path d="M2 2l7.586 7.586"/>
-            <circle cx="11" cy="11" r="2"/>
-        </svg>
-    </button>
-`);
-
-// Přidat handler pro debug tlačítko
-document.getElementById('debugButton').addEventListener('click', () => {
-    DEBUG.enabled = !DEBUG.enabled;
-    document.getElementById('debugButton').classList.toggle('active');
-});
-
 // Upravit funkci processAndDisplayCode
 function processAndDisplayCode(programText, programName) {
     // Nejdřív uložit aktuální obsah
     if (activeProgram) {
         const currentCode = editorTextarea.value.split('\n');
         programCodes.set(activeProgram.textContent, currentCode);
-        DEBUG.log('Ukládám kód programu:', activeProgram.textContent, currentCode.length);
+        console.debug('Ukládám kód programu:', activeProgram.textContent, currentCode.length);
     }
 
     // Zpracovat nový kód
@@ -281,7 +251,7 @@ function processAndDisplayCode(programText, programName) {
     if (programName) {
         const code = text.split('\n');
         programCodes.set(programName, code);
-        DEBUG.log('Nastavuji kód programu:', programName, code.length);
+        console.debug('Nastavuji kód programu:', programName, code.length);
     }
 
     // Zobrazit kód
@@ -299,7 +269,7 @@ fileInput.addEventListener('change', (e) => {
     programList.innerHTML = '';
     programStorage.clear();
 
-    DEBUG.log('Načítání CNC souborů:', files.map(f => f.name).join(', '));
+    console.log('Načítání CNC souborů:', files.map(f => f.name).join(', '));
 
     files.forEach(file => {
         const ext = file.name.split('.').pop().toLowerCase();
@@ -308,7 +278,7 @@ fileInput.addEventListener('change', (e) => {
             reader.onload = function(event) {
                 const content = event.target.result;
                 const lines = content.split('\n');
-                DEBUG.log(`Načítám program ${file.name}:`, lines.length, 'řádků');
+                console.log(`Načítám program ${file.name}:`, lines.length, 'řádků');
 
                 // Uložit program do úložiště
                 programStorage.save(file.name, lines);
@@ -369,21 +339,24 @@ editorTextarea.addEventListener('input', () => {
     clearTimeout(parseTimeout);
     parseTimeout = setTimeout(() => {
         const programText = editorTextarea.value;
-
-        console.group('Parsování editoru');
+        // Zpracovat text přes parser
         const parsedBlocks = cncParser.parseProgram(programText);
-        parsedBlocks.forEach(block => {
-            if (block.type === 'interpreted') {
-                console.log(block.originalLine);
-            }
-        });
-        console.groupEnd();
 
-        parserTextarea.value = parsedBlocks
-            .map(block => block.originalLine)
+        // Sestavit výsledný text včetně interpretovaných řádků
+        const formattedText = parsedBlocks
+            .map(block => {
+                // Přidat odsazení pro interpretované řádky
+                if (block.type === 'interpreted') {
+                    return '    ' + block.originalLine;
+                }
+                return block.originalLine;
+            })
             .join('\n');
 
-        // Aktualizovat číslování
+        // Aktualizovat horní textareu
+        parserTextarea.value = formattedText;
+
+        // Aktualizovat číslování řádků
         updateLineNumbers(parserTextarea, parserLineNumbers);
     }, 300);
 });
@@ -391,22 +364,15 @@ editorTextarea.addEventListener('input', () => {
 // Funkce pro aktualizaci čísel řádků
 function updateLineNumbers(textarea, numberContainer) {
     const lines = textarea.value.split('\n');
+    const lineCount = lines.length;
     const numbers = [];
-    let currentNumber = 1;
 
-    lines.forEach(line => {
-        if (line.startsWith('; →')) {
-            // Pro interpretované řádky přidat prázdný div
-            numbers.push('<div class="line-number interpreted"></div>');
-        } else {
-            // Pro normální řádky přidat číslo
-            numbers.push(`<div data-line="${currentNumber}" class="line-number">${currentNumber}</div>`);
-            currentNumber++;
-        }
-    });
+    for (let i = 0; i < lineCount; i++) {
+        // Vždy zobrazit pouze pořadové číslo řádku
+        numbers.push(`<div data-line="${i + 1}" class="line-number">${i + 1}</div>`);
+    }
 
     numberContainer.innerHTML = numbers.join('');
-
     const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight);
     Array.from(numberContainer.children).forEach(div => {
         div.style.height = `${lineHeight}px`;
@@ -461,6 +427,7 @@ function scrollToLine(textarea, lineNumber, forceCenter = false) {
     }
 }
 
+// Upravit funkci synchronizeLines
 function synchronizeLines(sourceTextarea, targetTextarea, sourceLine) {
     // Odstranit předchozí zvýraznění
     document.querySelectorAll('.line-numbers div.active, .line-highlight').forEach(el => {
@@ -490,6 +457,25 @@ function synchronizeLines(sourceTextarea, targetTextarea, sourceLine) {
             // Když klikneme v editoru, centrujeme jen parser
             scrollToLine(parserTextarea, sourceLine, true);
         }
+    }
+
+    // Přidat detekci L105
+    const clickedLine = lines[sourceLine - 1];
+    if (clickedLine && clickedLine.includes('L105')) {
+        // Aktualizovat panel s R-parametry v prostředním okně
+        const panel = document.getElementById('middleRParamsPanel');
+        const content = panel.querySelector('.r-params-content');
+        const params = rParameters.getAll();
+
+        content.innerHTML = params.map(p => `
+            <div class="r-param-row">
+                <span>R${p.num}</span>
+                <span>${p.value.toFixed(3)}</span>
+            </div>
+        `).join('');
+
+        // Zobrazit panel
+        panel.classList.remove('hidden');
     }
 }
 
@@ -528,7 +514,51 @@ window.addEventListener('resize', () => {
 
 window.addEventListener('resize', updateHeights);
 
-// Upravit event listenery v DOMContentLoaded
+// Funkce pro inicializaci R-parametrů - definovat PŘED DOMContentLoaded
+function initRParams() {
+    const midRParamsButton = document.getElementById('midRParamsButton');
+    if (!midRParamsButton) return;
+
+    const paramsPanel = midRParamsButton.querySelector('.middle-r-params');
+    const paramsContent = paramsPanel?.querySelector('.r-params-content');
+    const overlay = document.querySelector('.overlay');
+
+    function updateParamsContent() {
+        const params = rParameters.getAll();
+        if (paramsContent) {
+            paramsContent.innerHTML = params.map(p => `
+                <div class="r-param-row">
+                    <span>R${p.num}</span>
+                    <span>${p.value.toFixed(3)}</span>
+                </div>
+            `).join('');
+        }
+    }
+
+    // Handler pro tlačítko
+    midRParamsButton.querySelector('button')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        console.debug('Otevírám R-parametry');
+        updateParamsContent();
+        paramsPanel?.classList.remove('hidden');
+        overlay?.classList.add('visible');
+    });
+
+    // Handler pro zavírání
+    paramsPanel?.querySelector('.close-button')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        paramsPanel?.classList.add('hidden');
+        overlay?.classList.remove('visible');
+    });
+
+    // Handler pro overlay
+    overlay?.addEventListener('click', () => {
+        paramsPanel?.classList.add('hidden');
+        overlay?.classList.remove('visible');
+    });
+}
+
+// Jediný DOMContentLoaded handler
 document.addEventListener('DOMContentLoaded', function() {
     // Přidat event listener na editor-label pro otevření horního panelu
     const editorLabel = document.querySelector('.editor-label');
@@ -571,15 +601,25 @@ document.addEventListener('DOMContentLoaded', function() {
     // Zavolat načtení programů
     loadDefaultProgram();
 
-    // Aktivovat debug mode při startu
-    const debugButton = document.getElementById('debugButton');
-    debugButton.classList.add('active');
-    DEBUG.enabled = true;
+    // Inicializace R-parametrů - POUZE JEDNOU
+    initRParams();
+});
+
+// Odstranit všechny staré handlery pro R-parametry
+const oldHandlers = [
+    'midRParamsButton',
+    'rParamsButton',
+    'rParamsPanel'
+].forEach(id => {
+    const element = document.getElementById(id);
+    if (element) {
+        element.replaceWith(element.cloneNode(true));
+    }
 });
 
 async function loadDefaultProgram() {
     try {
-        DEBUG.log('Načítám programy...');
+        console.log('Načítám programy...');
 
         const response = await fetch('data/K1_03_4431.json');
         const fullProgram = await response.json();
@@ -593,7 +633,7 @@ async function loadDefaultProgram() {
 // Přepsat původní funkci loadProgramsFromJSON
 async function loadProgramsFromJSON(data) {
     try {
-        DEBUG.log('Načítání programů z JSON...');
+        console.log('Načítání programů z JSON...');
 
         if (!data?.programs?.length) {
             throw new Error('JSON neobsahuje žádné programy');
@@ -665,7 +705,7 @@ function saveProgramsToJSON() {
         });
 
         // Debug výpis
-        DEBUG.log('Programy k uložení:', programs.map(p => ({
+        console.log('Programy k uložení:', programs.map(p => ({
             name: p.name,
             lines: p.code.length
         })));
@@ -706,19 +746,19 @@ const programStorage = {
         if (!name) return;
         const lines = Array.isArray(code) ? [...code] :
                      typeof code === 'string' ? code.split('\n') : [];
-        DEBUG.log(`Ukládám program ${name}:`, lines.length, 'řádků');
+        console.log(`Ukládám program ${name}:`, lines.length, 'řádků');
         this.programs.set(name, lines);
     },
 
     load(name) {
         const code = this.programs.get(name);
-        DEBUG.log(`Načítám program ${name}:`, code?.length || 0, 'řádků');
+        console.log(`Načítám program ${name}:`, code?.length || 0, 'řádků');
         return code || [];
     },
 
     clear() {
         this.programs.clear();
-        DEBUG.log('Úložiště vyčištěno');
+        console.log('Úložiště vyčištěno');
     }
 };
 
@@ -730,7 +770,7 @@ document.getElementById('saveButton').removeEventListener('click', saveProgramsT
 // Přidáme nový event listener na kliknutí na saveButton element (ne jQuery)
 document.getElementById('saveButton').addEventListener('click', (e) => {
     e.preventDefault();
-    DEBUG.log('Save button clicked!');
+    console.log('Save button clicked!');
 
     try {
         // Uložit aktuální program
@@ -755,7 +795,7 @@ document.getElementById('saveButton').addEventListener('click', (e) => {
 
         // Debug výpis
         programs.forEach(p => {
-            DEBUG.log(`Program ${p.name}:`, p.code.length, 'řádků');
+            console.log(`Program ${p.name}:`, p.code.length, 'řádků');
         });
 
         // Vytvořit a uložit JSON
@@ -778,7 +818,7 @@ document.getElementById('saveButton').addEventListener('click', (e) => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        DEBUG.log('Soubor uložen:', jsonData.name, 'programů:', programs.length);
+        console.log('Soubor uložen:', jsonData.name, 'programů:', programs.length);
 
     } catch (error) {
         console.error('Chyba při ukládání:', error);
@@ -820,44 +860,42 @@ updateHeights();
 // Upravit click handler pro program items
 function createProgramClickHandler(item, program) {
     return () => {
+        // Uložit aktuální program před přepnutím
         if (activeProgram) {
             const currentCode = editorTextarea.value.split('\n');
             programStorage.save(activeProgram.textContent, currentCode);
         }
 
-        // Načíst a zparsovat nový program
+        // Načíst nový program
         const code = programStorage.load(program.name);
-        const programText = code.join('\n');
+        console.log(`Načítám program ${program.name}:`, code.length, 'řádků');
 
-        console.group('Parsování programu:', program.name);
-        const parsedBlocks = cncParser.parseProgram(programText);
-        parsedBlocks.forEach(block => {
-            if (block.type === 'interpreted') {
-                console.log(block.originalLine);
-            }
-        });
-        console.groupEnd();
+        // Nastavit kód do editoru
+        editorTextarea.value = code.join('\n');
 
-        // Nastavit texty do editorů
-        editorTextarea.value = programText;
-        parserTextarea.value = parsedBlocks
-            .map(block => block.originalLine)
+        // Spustit parsování
+        const parsedBlocks = cncParser.parseProgram(code.join('\n'));
+        const formattedText = parsedBlocks
+            .map(block => block.type === 'interpreted' ? '    ' + block.originalLine : block.originalLine)
             .join('\n');
 
-        // Aktualizovat číslování
+        // Nastavit parsovaný text do horního editoru
+        parserTextarea.value = formattedText;
+
+        // Aktualizovat číslování řádků
         updateLineNumbers(editorTextarea, editorLineNumbers);
         updateLineNumbers(parserTextarea, parserLineNumbers);
 
         // Aktualizovat aktivní program
-        document.querySelectorAll('.program-item').forEach(p =>
-            p.classList.remove('active')
-        );
+        if (activeProgram) {
+            activeProgram.classList.remove('active');
+        }
         item.classList.add('active');
         activeProgram = item;
 
         // Skrýt panel pouze pokud není zamrzlý
         if (!isPanelFrozen) {
-            toggleTopPanel(); // Vráceno zpět na toggleTopPanel místo visibility
+            toggleTopPanel();
         }
     };
 }
@@ -889,7 +927,7 @@ function saveCncFile(type = 'MPF') {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    DEBUG.log(`Uložen CNC soubor: ${fileName}`);
+    console.log(`Uložen CNC soubor: ${fileName}`);
 }
 
 // Přidat event listener pro ukládání CNC souboru
@@ -901,3 +939,130 @@ document.getElementById('saveCncButton').addEventListener('click', () => {
 });
 
 updateHeights();
+
+// Přidat tlačítko R do horního panelu po debugButton
+document.querySelector('.top-panel-controls').insertAdjacentHTML('beforeend', `
+    <button id="rParamsButton" class="square-button" title="R-Parameters">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 6h16l-8 12-8-12z"/>
+            <text x="8" y="14" fill="currentColor" style="font: bold 12px sans-serif;">R</text>
+        </svg>
+    </button>
+    <div id="rParamsPanel" class="r-params-panel hidden">
+        <div class="r-params-header">
+            <span>R-Parametry</span>
+            <button class="close-button">×</button>
+        </div>
+        <div class="r-params-content"></div>
+    </div>
+`);
+
+// Přidat handler pro R-parametry
+document.getElementById('rParamsButton').addEventListener('click', () => {
+    const panel = document.getElementById('rParamsPanel');
+    const content = panel.querySelector('.r-params-content');
+
+    // Aktualizovat obsah
+    const params = rParameters.getAll();
+    content.innerHTML = params.map(p => `
+        <div class="r-param-row">
+            <span>R${p.num}</span>
+            <span>${p.value.toFixed(3)}</span>
+            <span class="r-param-time">${new Date(p.lastModified).toLocaleTimeString()}</span>
+        </div>
+    `).join('');
+
+    panel.classList.toggle('hidden');
+});
+
+// Přidat event listener pro R tlačítko
+document.getElementById('midRParamsButton').addEventListener('click', () => {
+    const panel = document.getElementById('middleRParamsPanel');
+    panel.classList.toggle('hidden');
+});
+
+updateHeights();
+
+// Přidat správný event listener pro R tlačítko a jeho obsah
+document.addEventListener('DOMContentLoaded', () => {
+    const midRParamsButton = document.getElementById('midRParamsButton');
+    const paramsContent = midRParamsButton.querySelector('.middle-r-params');
+
+    // Click handler pro celou skupinu
+    midRParamsButton.addEventListener('click', (e) => {
+        // Aktualizovat obsah při každém kliknutí
+        const params = rParameters.getAll();
+        const content = paramsContent.querySelector('.r-params-content');
+
+        content.innerHTML = params.map(p => `
+            <div class="r-param-row">
+                <span>R${p.num}</span>
+                <span>${p.value.toFixed(3)}</span>
+            </div>
+        `).join('');
+
+        // Přepnout viditelnost
+        paramsContent.classList.toggle('hidden');
+    });
+
+    // Close button handler
+    const closeButton = paramsContent.querySelector('.close-button');
+    if (closeButton) {
+        closeButton.addEventListener('click', (e) => {
+            e.stopPropagation(); // Zabránit bublání události
+            paramsContent.classList.add('hidden');
+        });
+    }
+});
+
+/* ...existing code... */
+
+// Odstranit původní handler pro horní R panel
+const topPanelControls = document.querySelector('.top-panel-controls');
+const rParamsButton = document.getElementById('rParamsButton');
+if (rParamsButton) {
+    rParamsButton.remove();
+}
+const rParamsPanel = document.getElementById('rParamsPanel');
+if (rParamsPanel) {
+    rParamsPanel.remove();
+}
+
+/* ...existing code... */
+
+// Odstranit původní duplicitní event listener
+document.getElementById('midRParamsButton').removeEventListener('click', () => {});
+
+// Přidat správný event listener pro R tlačítko a jeho obsah
+document.addEventListener('DOMContentLoaded', () => {
+    const midRParamsButton = document.getElementById('midRParamsButton');
+    const paramsContent = midRParamsButton.querySelector('.middle-r-params');
+
+    // Click handler pro celou skupinu
+    midRParamsButton.addEventListener('click', (e) => {
+        // Aktualizovat obsah při každém kliknutí
+        const params = rParameters.getAll();
+        const content = paramsContent.querySelector('.r-params-content');
+
+        content.innerHTML = params.map(p => `
+            <div class="r-param-row">
+                <span>R${p.num}</span>
+                <span>${p.value.toFixed(3)}</span>
+            </div>
+        `).join('');
+
+        // Přepnout viditelnost
+        paramsContent.classList.toggle('hidden');
+    });
+
+    // Close button handler
+    const closeButton = paramsContent.querySelector('.close-button');
+    if (closeButton) {
+        closeButton.addEventListener('click', (e) => {
+            e.stopPropagation(); // Zabránit bublání události
+            paramsContent.classList.add('hidden');
+        });
+    }
+});
+
+/* ...existing code... */

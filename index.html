@@ -38,6 +38,26 @@
             <div class="middle-content">
                 <button id="lpButton" class="square-button">LP</button>
 
+                <!-- Přidat overlay pro pozadí -->
+                <div class="overlay"></div>
+
+                <!-- Upravit R panel -->
+                <div id="midRParamsButton" class="r-params-group">
+                    <button class="square-button" title="R-Parameters">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 6h16l-8 12-8-12z"/>
+                            <text x="8" y="14" fill="currentColor" style="font: bold 12px sans-serif;">R</text>
+                        </svg>
+                    </button>
+                    <div class="middle-r-params hidden">
+                        <div class="r-params-header">
+                            <span>R-Parametry</span>
+                            <button class="close-button">×</button>
+                        </div>
+                        <div class="r-params-content"></div>
+                    </div>
+                </div>
+
                 <!-- Ikona pro načtení CNC souborů -->
                 <div class="file-icon" onclick="document.getElementById('fileInput').click()">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
