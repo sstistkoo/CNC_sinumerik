@@ -17,26 +17,45 @@ export class CNCParser {
         this.lastMCodes = [];     // Poslední M funkce
         this.lastCR = null;       // Poslední CR hodnota
         this.debug = true;  // Pro sledování výpočtů
+        this.speedFormat = 'S';     // Změněno z 'S=' na 'S'
+        this.lastSpeedValue = null;  // Hodnota otáček
+        this.spindleActive = false;  // Přidat sledování stavu vřetene
     }
 
     async parseProgram(programText) {
         this.reset();
         const lines = programText.split('\n');
         const result = [];
-        let l105Params = [];
+        let isL105Processing = false;
 
-        // Načíst L105 parametry
-        if (lines.some(line => line.includes('L105'))) {
+        // Reset parametrů na počáteční hodnoty
+        this.rParameters.resetToOriginal();
+
+        // Nejdřív zkontrolovat jestli máme L105 v programu
+        if (lines.some(line => /L105\s*;/.test(line))) {
+            console.log('Detekován L105 podprogram - načítám parametry...');
             const l105Text = await this.loadL105Text();
             if (l105Text) {
-                l105Params = this.rParameters?.parseL105(l105Text) || [];
-                console.log('Načtené L105 parametry:', l105Params);
+                try {
+                    // Načíst a parsovat parametry z L105
+                    const params = await this.rParameters?.parseL105(l105Text);
+                    console.log('Načtené parametry z L105:', params);
+
+                    if (!params || params.length === 0) {
+                        console.error('Nepodařilo se načíst parametry z L105');
+                    }
+                } catch (error) {
+                    console.error('Chyba při parsování L105:', error);
+                }
             }
         }
 
-        // Zpracovat řádky
+        // Zpracovat řádky programu
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
+
+            // Ignorovat prázdné řádky
+            if (!line) continue;
 
             // Přidat originální řádek
             result.push({
@@ -45,13 +64,140 @@ export class CNCParser {
                 type: 'original'
             });
 
-            // Zpracovat L105 parametry - zkrácený výstup
-            if (line.includes('L105')) {
+            // Detekovat začátek L105
+            if (line.includes(';PODPROGRAM: L105.SPF')) {
+                isL105Processing = true;
                 result.push({
                     lineNumber: i + 1,
                     originalLine: '    ; → R parametry načteny',
                     type: 'interpreted'
                 });
+                continue;
+            }
+
+            // Speciální zpracování pro L105
+            if (isL105Processing) {
+                // Interpretovat pouze M-kódy a konce programu v L105
+                if (line.match(/^N\d+\s*M\d+/)) {
+                    const mMatch = line.match(/M(\d+)/);
+                    if (mMatch) {
+                        result.push({
+                            lineNumber: i + 1,
+                            originalLine: `    ; → M${mMatch[1]}`,
+                            type: 'interpreted'
+                        });
+                    }
+                }
+                // Detekovat přiřazení R-parametrů a výpočty
+                else if (line.match(/R\d+\s*=/)) {
+                    const assignments = this.findParameterAssignments(line);
+                    for (const [num, expr] of assignments) {
+                        try {
+                            const value = this.rParameters.evaluateExpression(expr);
+                            this.rParameters.set(num, value);
+                            console.log(`Nastavuji R${num} = ${value}`);
+                        } catch (error) {
+                            console.error(`Chyba při výpočtu R${num}:`, error);
+                        }
+                    }
+                }
+                continue;
+            }
+
+            // Zpracovat změny R-parametrů v každém řádku
+            const assignments = this.findParameterAssignments(line);
+            if (assignments.length > 0) {
+                for (const [num, expr] of assignments) {
+                    const value = this.rParameters.evaluateExpression(expr);
+                    this.rParameters.set(num, value);
+                    console.log(`Změna parametru R${num} = ${value}`);
+                }
+            }
+
+            // Detekovat a zpracovat L-příkazy (podprogramy)
+            if (line.match(/^N\d*\s*L\d+/)) {
+                const lMatch = line.match(/L(\d+)/);
+                if (lMatch) {
+                    const lNumber = lMatch[1];
+                    if (lNumber === '105') {
+                        // Speciální zpracování pro L105 - vypiš info o načtení parametrů
+                        const params = this.rParameters.getAll();
+                        if (params && params.length > 0) {
+                            result.push({
+                                lineNumber: i + 1,
+                                originalLine: '    ; → R parametry načteny z L105',
+                                type: 'interpreted'
+                            });
+                        }
+                    } else {
+                        // Pro ostatní L-příkazy
+                        result.push({
+                            lineNumber: i + 1,
+                            originalLine: `    ; → Volání podprogramu L${lNumber}`,
+                            type: 'interpreted'
+                        });
+                    }
+                    continue;
+                }
+            }
+
+            // Zpracovat L105
+            if (line.includes('L105')) {
+                // Získat aktuální hodnoty parametrů
+                const currentParams = this.rParameters.getAll();
+                console.log('Aktuální parametry:', currentParams);
+
+                if (currentParams && currentParams.length > 0) {
+                    // Seřadit parametry podle čísel
+                    const sortedParams = currentParams.sort((a, b) => {
+                        return parseInt(a.num) - parseInt(b.num);
+                    });
+
+                    result.push({
+                        lineNumber: i + 1,
+                        originalLine: '    ; → R parametry načteny',
+                        type: 'interpreted'
+                    });
+                } else {
+                    result.push({
+                        lineNumber: i + 1,
+                        originalLine: '    ; → Chyba: Parametry nebyly načteny',
+                        type: 'interpreted'
+                    });
+                }
+                continue;
+            }
+
+            // Detekce otáček pro všechny řádky
+            const speedMatch = line.match(/S=?(\d+(?:\.\d+)?)/);
+            if (speedMatch) {
+                this.lastSpeedValue = speedMatch[1];
+                this.speedFormat = 'S';
+            }
+
+            // Zpracovat M-kódy a samostatné otáčky
+            if (!this.hasCoordinates(line) && (line.includes('M') || speedMatch)) {
+                const mCodes = line.match(/M\d+/g) || [];
+                if (mCodes.length > 0 || (speedMatch && this.spindleActive)) {
+                    let interpreted = '    ; → ';
+                    if (mCodes.length > 0) {
+                        // Zpracovat každý M-kód
+                        mCodes.filter(code => !['M7', 'M8'].includes(code))
+                              .forEach(code => {
+                                  interpreted += `${code} `;
+                                  this.processMCode(code);
+                              });
+                    }
+                    // Přidat otáčky pouze pokud je vřeteno aktivní
+                    if (this.lastSpeedValue && this.spindleActive) {
+                        interpreted += `S${this.lastSpeedValue}`;
+                    }
+                    result.push({
+                        lineNumber: i + 1,
+                        originalLine: interpreted.trim(),
+                        type: 'interpreted'
+                    });
+                }
                 continue;
             }
 
@@ -127,11 +273,18 @@ export class CNCParser {
             const feedMatch = line.match(/F([\d.]+)/);
             if (feedMatch) this.lastFeed = feedMatch[1];
 
-            const speedMatch = line.match(/S=?([\d.]+)/);
-            if (speedMatch) this.lastSpeed = speedMatch[1];
+            // Vylepšená detekce otáček - zachytí všechny formáty
+            const speedMatch = line.match(/S=?(\d+(?:\.\d+)?)/);
+            if (speedMatch) {
+                this.lastSpeedValue = speedMatch[1];
+                this.speedFormat = 'S';  // Vždy použít formát bez '='
+            }
 
+            // Filtrovat M-kódy - vynechat M7 a M8
             const mCodes = line.match(/M\d+/g);
-            if (mCodes) this.lastMCodes = mCodes;
+            if (mCodes) {
+                this.lastMCodes = mCodes.filter(code => !['M7', 'M8'].includes(code));
+            }
 
             const crMatch = line.match(/CR=([\d.]+)/);
             if (crMatch) this.lastCR = crMatch[1];
@@ -173,8 +326,14 @@ export class CNCParser {
             // Přidat další parametry
             if (crMatch) interpreted += ` CR=${crMatch[1]}`;
             if (this.lastFeed) interpreted += ` F${this.lastFeed}`;
-            if (this.lastSpeed) interpreted += ` S=${this.lastSpeed}`;
-            if (this.lastMCodes.length > 0) interpreted += ` ${this.lastMCodes.join(' ')}`;
+            // Upravený výstup otáček podle původního formátu
+            if (this.lastSpeedValue) {
+                interpreted += ` ${this.speedFormat}${this.lastSpeedValue}`;
+            }
+            // Přidat M-kódy kromě M7 a M8
+            if (this.lastMCodes.length > 0) {
+                interpreted += ` ${this.lastMCodes.join(' ')}`;
+            }
 
             return {
                 X: this.absolutePosition.X,
@@ -191,20 +350,30 @@ export class CNCParser {
     evaluateExpression(expr) {
         if (!expr) return 0;
         try {
-            // Předčištění výrazu
+            // Předčištění výrazu a zpracování R-parametrů
             let cleanExpr = expr
                 .replace(/\s+/g, '')
-                // Nahradit R-parametry jejich hodnotami
                 .replace(/R(\d+)/g, (_, num) => {
                     const value = this.rParameters?.get(num);
                     if (value === undefined) {
+                        // Zkusit získat hodnotu z getParameter
+                        const paramValue = this.getParameter(num);
+                        if (paramValue !== 0) {
+                            return paramValue.toString();
+                        }
                         console.warn(`Chybí hodnota pro R${num}, používám 0`);
                         return '0';
                     }
                     return value.toString();
                 });
 
-            // Vypočítat výsledek a zaokrouhlit na 3 desetinná místa
+            // Debug výpis pro kontrolu výpočtu
+            if (this.debug) {
+                console.log('Výraz:', expr);
+                console.log('Čistý výraz:', cleanExpr);
+            }
+
+            // Výpočet
             const result = Function('"use strict";return (' + cleanExpr + ')')();
             return parseFloat(result.toFixed(3));
         } catch (error) {
@@ -214,10 +383,50 @@ export class CNCParser {
     }
 
     getParameter(num) {
+        // Rozšířit sadu parametrů
         const params = {
-            '04': 462.2 - 40,
+            '04': 462.2 - 40,  // 422.2
             '25': 151.0,
+            '57': 517.5 - 40,  // 477.5 pro X=R57+15
         };
         return params[num] || 0;
+    }
+
+    findParameterAssignments(line) {
+        const assignments = [];
+        // Regular expression pro zachycení všech typů přiřazení:
+        // - R44=25.326 (přímé přiřazení)
+        // - R47=(82-10) (výraz v závorkách)
+        // - R54=R54*R69 (výraz s R-parametry)
+        const regex = /R(\d+)\s*=\s*(\([^)]+\)|[-\d.R()+\/*\s]+)(?=\s+R\d+|$|;|$)/g;
+
+        let match;
+        while ((match = regex.exec(line)) !== null) {
+            const [_, num, expr] = match;
+            // Vyčistit výraz od nadbytečných mezer
+            const cleanExpr = expr.trim();
+            console.log(`Nalezeno přiřazení: R${num} = ${cleanExpr}`);
+            assignments.push([num, cleanExpr]);
+        }
+
+        if (assignments.length > 1) {
+            console.log(`Nalezeno více přiřazení na řádku: ${line}`);
+            console.log('Přiřazení:', assignments);
+        }
+
+        return assignments;
+    }
+
+    processMCode(code) {
+        switch (code) {
+            case 'M3':
+            case 'M4':
+                this.spindleActive = true;
+                break;
+            case 'M5':
+                this.spindleActive = false;
+                this.lastSpeedValue = null; // Reset otáček
+                break;
+        }
     }
 }

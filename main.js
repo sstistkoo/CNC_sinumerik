@@ -448,6 +448,20 @@ function scrollToLine(textarea, lineNumber, forceCenter = false) {
 
 // Upravit funkci synchronizeLines
 function synchronizeLines(sourceTextarea, targetTextarea, sourceLine) {
+    // Nejdřív zkontrolovat existenci všech potřebných elementů
+    if (!sourceTextarea || !targetTextarea) {
+        console.error('Chybí textarea element');
+        return;
+    }
+
+    const sourceLineNumbers = sourceTextarea.parentElement?.querySelector('.line-numbers');
+    const targetLineNumbers = targetTextarea.parentElement?.querySelector('.line-numbers');
+
+    if (!sourceLineNumbers || !targetLineNumbers) {
+        console.error('Chybí line-numbers element');
+        return;
+    }
+
     // Odstranit předchozí zvýraznění
     document.querySelectorAll('.line-numbers div.active, .line-highlight').forEach(el => {
         el.classList.remove('active');
@@ -460,12 +474,17 @@ function synchronizeLines(sourceTextarea, targetTextarea, sourceLine) {
     const lines = sourceTextarea.value.split('\n');
     if (sourceLine > 0 && sourceLine <= lines.length) {
         // Zvýraznit čísla řádků
-        sourceTextarea.parentElement.querySelector(`.line-numbers div[data-line="${sourceLine}"]`)?.classList.add('active');
-        targetTextarea.parentElement.querySelector(`.line-numbers div[data-line="${sourceLine}"]`)?.classList.add('active');
+        const sourceLineDiv = sourceLineNumbers.querySelector(`div[data-line="${sourceLine}"]`);
+        const targetLineDiv = targetLineNumbers.querySelector(`div[data-line="${sourceLine}"]`);
+
+        if (sourceLineDiv) sourceLineDiv.classList.add('active');
+        if (targetLineDiv) targetLineDiv.classList.add('active');
 
         // Přidat zvýraznění řádků
-        addLineHighlight(sourceTextarea, sourceLine);
-        addLineHighlight(targetTextarea, sourceLine);
+        if (sourceTextarea.parentElement && targetTextarea.parentElement) {
+            addLineHighlight(sourceTextarea, sourceLine);
+            addLineHighlight(targetTextarea, sourceLine);
+        }
 
         // Upravená logika centrování
         if (sourceTextarea === parserTextarea) {
@@ -478,23 +497,23 @@ function synchronizeLines(sourceTextarea, targetTextarea, sourceLine) {
         }
     }
 
-    // Přidat detekci L105
+    // Přidat detekci L105 s kontrolou existence a seřazením parametrů
     const clickedLine = lines[sourceLine - 1];
-    if (clickedLine && clickedLine.includes('L105')) {
-        // Aktualizovat panel s R-parametry v prostředním okně
+    if (clickedLine?.includes('L105')) {
         const panel = document.getElementById('middleRParamsPanel');
-        const content = panel.querySelector('.r-params-content');
-        const params = rParameters.getAll();
+        const content = panel?.querySelector('.r-params-content');
+        if (panel && content) {
+            const params = rParameters.getAll()
+                .sort((a, b) => parseInt(a.num) - parseInt(b.num)); // Seřadit podle čísel
 
-        content.innerHTML = params.map(p => `
-            <div class="r-param-row">
-                <span>R${p.num}</span>
-                <span>${p.value.toFixed(3)}</span>
-            </div>
-        `).join('');
-
-        // Zobrazit panel
-        panel.classList.remove('hidden');
+            content.innerHTML = params.map(p => `
+                <div class="r-param-row">
+                    <span>R${p.num.padStart(2, '0')}</span>
+                    <span>${p.value.toFixed(3)}</span>
+                </div>
+            `).join('');
+            panel.classList.remove('hidden');
+        }
     }
 }
 
@@ -970,14 +989,21 @@ updateHeights();
 
 // Upravit event listener pro R tlačítko
 document.getElementById('rParamsButton').addEventListener('click', () => {
-    const params = rParameters.getAll();
+    const params = rParameters.getAll()
+        .sort((a, b) => {
+            // Převést čísla parametrů na čísla pro správné řazení
+            const numA = parseInt(a.num, 10);
+            const numB = parseInt(b.num, 10);
+            return numA - numB;
+        });
+
     const panel = document.getElementById('rParamsPanel');
     const overlay = document.getElementById('rParamsOverlay');
     const content = panel.querySelector('.r-params-content');
 
     content.innerHTML = params.map(p => `
         <div class="r-param-row">
-            <span>R${p.num}</span>
+            <span>R${p.num.padStart(2, '0')}</span>
             <span>${p.value.toFixed(3)}</span>
         </div>
     `).join('');
