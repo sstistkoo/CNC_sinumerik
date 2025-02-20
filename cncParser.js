@@ -12,6 +12,10 @@ export class CNCParser {
         this.activeMotion = 'G90';
         this.lastGCode = 'G1';
         this.modalG = 'G1';
+        this.lastFeed = null;     // Poslední posuv
+        this.lastSpeed = null;    // Poslední otáčky
+        this.lastMCodes = [];     // Poslední M funkce
+        this.lastCR = null;       // Poslední CR hodnota
         this.debug = true;  // Pro sledování výpočtů
     }
 
@@ -41,14 +45,12 @@ export class CNCParser {
                 type: 'original'
             });
 
-            // Zpracovat L105 parametry
+            // Zpracovat L105 parametry - zkrácený výstup
             if (line.includes('L105')) {
-                l105Params.forEach(p => {
-                    result.push({
-                        lineNumber: i + 1,
-                        originalLine: `    ; → R${p.num} = ${p.value.toFixed(3)}`,
-                        type: 'interpreted'
-                    });
+                result.push({
+                    lineNumber: i + 1,
+                    originalLine: '    ; → R parametry načteny',
+                    type: 'interpreted'
                 });
                 continue;
             }
@@ -102,29 +104,39 @@ export class CNCParser {
 
     parseMotion(line) {
         try {
-            // Extrahovat všechny potřebné informace z řádku
+            // Extrahovat informace z řádku
             const blockMatch = line.match(/^N(\d+)/);
             const blockNum = blockMatch ? blockMatch[1] : '';
 
+            // Detekce G kódů
             const gCodes = line.match(/G[0-4]\d?/g) || [];
-            const feedMatch = line.match(/F([\d.]+)/);
-            const speedMatch = line.match(/S=?([\d.]+)/);
-            const mCodes = line.match(/M\d+/g) || [];
-            const crMatch = line.match(/CR=([\d.]+)/);
-
-            // Zachovat předchozí hodnoty a zpracovat pohyby
-            const prevX = this.currentPosition.X;
-            const prevZ = this.currentPosition.Z;
-
-            // Aktualizace G kódů
-            const gMatch = line.match(/G([0123])/);
-            if (gMatch) {
-                this.lastGCode = `G${gMatch[1]}`;
+            if (gCodes.length > 0) {
+                this.lastGCode = gCodes[gCodes.length - 1];
             }
+
+            // Detekce G90/G91 pro interní výpočty
+            const originalMotion = line.includes('G91') ? 'G91' : 'G90';
             if (line.includes('G90')) this.activeMotion = 'G90';
             if (line.includes('G91')) this.activeMotion = 'G91';
 
-            // Extrakce souřadnic s lepší detekcí
+            // Zachovat předchozí hodnoty
+            const prevX = this.currentPosition.X;
+            const prevZ = this.currentPosition.Z;
+
+            // Aktualizace parametrů
+            const feedMatch = line.match(/F([\d.]+)/);
+            if (feedMatch) this.lastFeed = feedMatch[1];
+
+            const speedMatch = line.match(/S=?([\d.]+)/);
+            if (speedMatch) this.lastSpeed = speedMatch[1];
+
+            const mCodes = line.match(/M\d+/g);
+            if (mCodes) this.lastMCodes = mCodes;
+
+            const crMatch = line.match(/CR=([\d.]+)/);
+            if (crMatch) this.lastCR = crMatch[1];
+
+            // Zpracování souřadnic
             const xMatch = line.match(/X\s*=?\s*([-\d.R()+\/*\s]+)/);
             const zMatch = line.match(/Z\s*=?\s*([-\d.R()+\/*\s]+)/);
 
@@ -132,7 +144,7 @@ export class CNCParser {
             let newX = prevX;
             let newZ = prevZ;
 
-            // Zpracování podle G90/G91 módu
+            // Výpočet pozic podle aktuálního G90/G91 módu
             if (xMatch) {
                 const xValue = this.evaluateExpression(xMatch[1]);
                 newX = this.activeMotion === 'G90' ? xValue : prevX + xValue;
@@ -142,40 +154,27 @@ export class CNCParser {
                 newZ = this.activeMotion === 'G91' ? prevZ + zValue : zValue;
             }
 
-            // Debug výpis
-            console.log(`Řádek: ${line}`);
-            console.log(`Mód: ${this.activeMotion}, G: ${this.lastGCode}`);
-            console.log(`Předchozí: X${prevX.toFixed(3)} Z${prevZ.toFixed(3)}`);
-            console.log(`Delta: X${xMatch ? this.evaluateExpression(xMatch[1]).toFixed(3) : 'none'} Z${zMatch ? this.evaluateExpression(zMatch[1]).toFixed(3) : 'none'}`);
-            console.log(`Nové: X${newX.toFixed(3)} Z${newZ.toFixed(3)}`);
-
-            // Aktualizace pozic
+            // Aktualizovat pozice
             this.currentPosition = { X: newX, Z: newZ };
             this.absolutePosition = { X: newX, Z: newZ };
 
-            // Sestavit interpretovaný řádek
+            // Sestavit řádek - vždy v G90 formátu
             let interpreted = '    ; → ';
 
-            // Přidat číslo bloku
+            // Číslo bloku
             if (blockNum) interpreted += `N${blockNum} `;
 
-            // Přidat G-kódy
-            interpreted += gCodes.join(' ') + ' ';
+            // Vždy použít G90 v interpretovaném výstupu
+            interpreted += `G90 ${this.lastGCode} `;
 
-            // Přidat souřadnice
+            // Absolutní souřadnice
             interpreted += `X${this.absolutePosition.X.toFixed(3)} Z${this.absolutePosition.Z.toFixed(3)}`;
 
-            // Přidat CR pokud existuje
+            // Přidat další parametry
             if (crMatch) interpreted += ` CR=${crMatch[1]}`;
-
-            // Přidat posuv
-            if (feedMatch) interpreted += ` F${feedMatch[1]}`;
-
-            // Přidat otáčky
-            if (speedMatch) interpreted += ` S=${speedMatch[1]}`;
-
-            // Přidat M-funkce
-            if (mCodes.length > 0) interpreted += ` ${mCodes.join(' ')}`;
+            if (this.lastFeed) interpreted += ` F${this.lastFeed}`;
+            if (this.lastSpeed) interpreted += ` S=${this.lastSpeed}`;
+            if (this.lastMCodes.length > 0) interpreted += ` ${this.lastMCodes.join(' ')}`;
 
             return {
                 X: this.absolutePosition.X,
