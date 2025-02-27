@@ -26,13 +26,15 @@
         </div>
 
         <div id="topEditor" class="editor">
-            <div class="editor-label">Prog.</div>
+            <button id="progButton" class="editor-button" type="button">Prog.</button>
             <div class="line-numbers" id="parserLineNumbers"></div>
             <textarea
                 placeholder="Parser rozparsované řádky..."
                 style="white-space: pre-wrap; tab-size: 4; overflow-x: hidden; word-wrap: normal;"
             ></textarea>
         </div>
+
+        <!-- Odstranit samostatný editor-handle -->
 
         <div id="middleWindow" class="middle-window">
             <div class="middle-content">
@@ -96,7 +98,7 @@
         </div>
 
         <div id="bottomEditor" class="editor">
-            <div class="editor-label" id="editorHandle">Menu</div>
+            <button id="menuButton" class="editor-button" type="button" draggable="false">Menu</button>
             <div class="line-numbers" id="editorLineNumbers"></div>
             <textarea
                 placeholder="Editor CNC kód..."

@@ -18,7 +18,6 @@ const rightPanel = document.getElementById('rightPanel');
 const lpButton = document.getElementById('lpButton');
 const ppButton = document.getElementById('ppButton');
 const topPanel = document.getElementById('topPanel');
-const editorHandle = document.getElementById('editorHandle');
 let isMiddleOpen = false;
 let isDragging = false;
 let startY, startTopHeight, startBottomHeight;
@@ -67,22 +66,7 @@ const resizeObserver = new ResizeObserver(() => {
 resizeObserver.observe(bottomEditor);
 resizeObserver.observe(topEditor);
 
-editorHandle.addEventListener('click', (e) => {
-    if (isDragging) return;
-    e.stopPropagation();
-
-    isMiddleOpen = !isMiddleOpen;
-    const availableSpace = 100 - (isMiddleOpen ? MIDDLE_HEIGHT : 0);
-    const currentRatio = topHeight / (topHeight + bottomHeight);
-
-    // Zachovat poměr výšek při přepínání
-    topHeight = availableSpace * currentRatio;
-    bottomHeight = availableSpace * (1 - currentRatio);
-
-    updateHeights();
-});
-
-editorHandle.addEventListener('touchstart', (e) => {
+editorTextarea.addEventListener('touchstart', (e) => {
     isDragging = true;
     startY = e.touches[0].clientY;
     startTopHeight = topHeight;
@@ -106,14 +90,6 @@ document.addEventListener('touchmove', (e) => {
 
 document.addEventListener('touchend', () => {
     isDragging = false;
-});
-
-editorHandle.addEventListener('mousedown', (e) => {
-    isDragging = true;
-    startY = e.clientY;
-    startTopHeight = topHeight;
-    startBottomHeight = bottomHeight;
-    e.preventDefault(); // Zabránit výchozímu chování
 });
 
 document.addEventListener('mousemove', (e) => {
@@ -400,10 +376,27 @@ function getClickedLineNumber(textarea, event) {
 
     // Upravený výpočet pozice
     const y = event.clientY - rect.top + scrollTop - paddingTop;
-    const lineNumber = Math.ceil(y / lineHeight);
+    const clickedLineIndex = Math.floor(y / lineHeight);
 
+    // Spočítat skutečné číslo řádku (přeskočit interpretované řádky)
     const lines = textarea.value.split('\n');
-    return Math.max(1, Math.min(lineNumber, lines.length));
+    let realLineNumber = 0;
+
+    for (let i = 0; i <= clickedLineIndex && i < lines.length; i++) {
+        if (!lines[i].trim().startsWith('; →')) {
+            realLineNumber++;
+        }
+    }
+
+    // Debug výpis pro kontrolu
+    console.log('Klik:', {
+        y,
+        clickedLineIndex,
+        realLineNumber,
+        lineContent: lines[clickedLineIndex]
+    });
+
+    return Math.max(1, Math.min(realLineNumber, lines.length));
 }
 
 // Přidat definici funkce addLineHighlight před její použití
@@ -641,6 +634,45 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Inicializace R-parametrů - POUZE JEDNOU
     initRParams();
+
+    // Najít tlačítka až po načtení DOM
+    const progButton = document.querySelector('#topEditor .editor-label');
+    const menuButton = document.querySelector('#bottomEditor .editor-label');
+
+    console.log('Nalezená tlačítka:', {
+        prog: progButton,
+        menu: menuButton
+    });
+
+    // Přidat event listener pro Prog button
+    if (progButton) {
+        progButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Prog button clicked');
+            const isOpen = topPanel.classList.toggle('open');
+            adjustHeightsForTopPanel(isOpen);
+        });
+    } else {
+        console.error('Prog button nenalezen - zkontrolujte CSS selektor #topEditor .editor-label');
+    }
+
+    // Přidat event listener pro Menu button
+    if (menuButton) {
+        menuButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Menu button clicked');
+            isMiddleOpen = !isMiddleOpen;
+            const availableSpace = 100 - (isMiddleOpen ? MIDDLE_HEIGHT : 0);
+            const currentRatio = topHeight / (topHeight + bottomHeight);
+            topHeight = availableSpace * currentRatio;
+            bottomHeight = availableSpace * (1 - currentRatio);
+            updateHeights();
+        });
+    } else {
+        console.error('Menu button nenalezen - zkontrolujte CSS selektor #bottomEditor .editor-label');
+    }
 });
 
 // Odstranit všechny staré handlery pro R-parametry
@@ -1032,3 +1064,269 @@ document.getElementById('rParamsOverlay').addEventListener('click', () => {
 });
 
 /* ...existing code... */
+
+// Přidat event listenery pro tlačítka Prog a Menu
+document.addEventListener('DOMContentLoaded', () => {
+    const progButton = document.querySelector('#topEditor .editor-label');
+    const menuButton = document.querySelector('#bottomEditor .editor-label');
+
+    if (progButton) {
+        progButton.addEventListener('click', () => {
+            const topPanel = document.getElementById('topPanel');
+            const isOpen = topPanel.classList.toggle('open');
+            adjustHeightsForTopPanel(isOpen);
+        });
+    }
+
+    if (menuButton) {
+        menuButton.addEventListener('click', () => {
+            isMiddleOpen = !isMiddleOpen;
+            const availableSpace = 100 - (isMiddleOpen ? MIDDLE_HEIGHT : 0);
+            const currentRatio = topHeight / (topHeight + bottomHeight);
+            topHeight = availableSpace * currentRatio;
+            bottomHeight = availableSpace * (1 - currentRatio);
+            updateHeights();
+        });
+    }
+});
+
+// Přidat na začátek souboru po deklaraci konstant
+// Přidat event listenery přímo (ne v DOMContentLoaded)
+if (progButton) {
+    progButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = topPanel.classList.toggle('open');
+        adjustHeightsForTopPanel(isOpen);
+    });
+}
+
+if (menuButton) {
+    menuButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        isMiddleOpen = !isMiddleOpen;
+        const availableSpace = 100 - (isMiddleOpen ? MIDDLE_HEIGHT : 0);
+        const currentRatio = topHeight / (topHeight + bottomHeight);
+        topHeight = availableSpace * currentRatio;
+        bottomHeight = availableSpace * (1 - currentRatio);
+        updateHeights();
+    });
+}
+
+// ...rest of existing code...
+
+// ODSTRANIT všechny staré event listenery pro tlačítka ze začátku souboru
+// ODSTRANIT duplikátní DOMContentLoaded handlery
+
+// Jediný DOMContentLoaded handler
+document.addEventListener('DOMContentLoaded', function() {
+    // Debug funkce pro sledování kliknutí
+    function logButtonClick(name, element) {
+        console.log(`Hledám tlačítko ${name}:`, element);
+        if (element) {
+            console.log(`${name} tlačítko nalezeno`);
+        } else {
+            console.error(`${name} tlačítko NENÍ nalezeno!`);
+        }
+    }
+
+    // Najít tlačítka pomocí ID
+    const progButton = document.getElementById('progButton');
+    const menuButton = document.getElementById('menuButton');
+
+    // Vypsat debug info
+    logButtonClick('Prog', progButton);
+    logButtonClick('Menu', menuButton);
+
+    // Handler pro Prog tlačítko
+    if (progButton) {
+        progButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Kliknuto na Prog tlačítko');
+            const isOpen = topPanel.classList.toggle('open');
+            adjustHeightsForTopPanel(isOpen);
+        });
+    }
+
+    // Handler pro Menu tlačítko
+    if (menuButton) {
+        menuButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Kliknuto na Menu tlačítko');
+            isMiddleOpen = !isMiddleOpen;
+            const availableSpace = 100 - (isMiddleOpen ? MIDDLE_HEIGHT : 0);
+            const currentRatio = topHeight / (topHeight + bottomHeight);
+            topHeight = availableSpace * currentRatio;
+            bottomHeight = availableSpace * (1 - currentRatio);
+            updateHeights();
+        });
+    }
+
+    // ...rest of existing DOMContentLoaded code...
+});
+
+// ODSTRANIT nebo zakomentovat všechny ostatní event listenery pro tlačítka
+// ...rest of existing code...
+
+// ODSTRANIT všechny existující event listenery pro tlačítka
+
+// Jediný event listener pro inicializaci tlačítek
+document.addEventListener('DOMContentLoaded', () => {
+    // Najít tlačítka
+    const progButton = document.querySelector('#topEditor .editor-button');
+    const menuButton = document.querySelector('#bottomEditor .editor-button');
+
+    console.log('Nalezená tlačítka:', {
+        prog: progButton,
+        menu: menuButton
+    });
+
+    // Event listener pro Prog tlačítko
+    if (progButton) {
+        progButton.onclick = (e) => {
+            e.preventDefault();
+            console.log('Prog tlačítko kliknuto');
+            const isOpen = topPanel.classList.toggle('open');
+            adjustHeightsForTopPanel(isOpen);
+        };
+    } else {
+        console.error('Nenalezeno Prog tlačítko!');
+    }
+
+    // Event listener pro Menu tlačítko
+    if (menuButton) {
+        menuButton.onclick = (e) => {
+            e.preventDefault();
+            console.log('Menu tlačítko kliknuto');
+            isMiddleOpen = !isMiddleOpen;
+            const availableSpace = 100 - (isMiddleOpen ? MIDDLE_HEIGHT : 0);
+            const currentRatio = topHeight / (topHeight + bottomHeight);
+            topHeight = availableSpace * currentRatio;
+            bottomHeight = availableSpace * (1 - currentRatio);
+            updateHeights();
+        };
+    } else {
+        console.error('Nenalezeno Menu tlačítko!');
+    }
+});
+
+// ...rest of existing code...
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Najít handle element
+    const editorHandle = document.getElementById('editorHandle');
+
+    if (editorHandle) {
+        console.log('Editor handle nalezen, přidávám event listenery');
+
+        editorHandle.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startY = e.clientY;
+            startTopHeight = topHeight;
+            startBottomHeight = bottomHeight;
+            e.preventDefault();
+            console.log('Začátek tažení');
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const deltaY = e.clientY - startY;
+            const deltaPercent = (deltaY / window.innerHeight) * 100;
+
+            // Výpočet nových výšek s omezením
+            const availableSpace = 100 - (isMiddleOpen ? MIDDLE_HEIGHT : 0);
+            const minHeight = 20;
+            const maxHeight = availableSpace - minHeight;
+
+            let newTopHeight = Math.min(maxHeight, Math.max(minHeight, startTopHeight + deltaPercent));
+            let newBottomHeight = availableSpace - newTopHeight;
+
+            if (newBottomHeight >= minHeight && newBottomHeight <= maxHeight) {
+                console.log('Změna výšky:', { top: newTopHeight, bottom: newBottomHeight });
+                topHeight = newTopHeight;
+                bottomHeight = newBottomHeight;
+                updateHeights();
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                console.log('Konec tažení');
+                updateHeights();
+            }
+        });
+    } else {
+        console.error('Editor handle nenalezen!');
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const menuButton = document.getElementById('menuButton');
+
+    if (menuButton) {
+        // Click event pro otevření/zavření
+        menuButton.onclick = (e) => {
+            if (!isDragging) {  // Přidat kontrolu tažení
+                e.preventDefault();
+                console.log('Menu tlačítko kliknuto');
+                isMiddleOpen = !isMiddleOpen;
+                const availableSpace = 100 - (isMiddleOpen ? MIDDLE_HEIGHT : 0);
+                const currentRatio = topHeight / (topHeight + bottomHeight);
+                topHeight = availableSpace * currentRatio;
+                bottomHeight = availableSpace * (1 - currentRatio);
+                updateHeights();
+            }
+        };
+
+        // Drag events pro resize
+        menuButton.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startY = e.clientY;
+            startTopHeight = topHeight;
+            startBottomHeight = bottomHeight;
+            e.preventDefault();
+            console.log('Začátek tažení za Menu');
+            menuButton.style.cursor = 'ns-resize';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const deltaY = e.clientY - startY;
+            const deltaPercent = (deltaY / window.innerHeight) * 100;
+
+            // Výpočet nových výšek s omezením
+            const availableSpace = 100 - (isMiddleOpen ? MIDDLE_HEIGHT : 0);
+            const minHeight = 20;
+            const maxHeight = availableSpace - minHeight;
+
+            let newTopHeight = Math.min(maxHeight, Math.max(minHeight, startTopHeight + deltaPercent));
+            let newBottomHeight = availableSpace - newTopHeight;
+
+            if (newBottomHeight >= minHeight && newBottomHeight <= maxHeight) {
+                console.log('Změna výšky:', { top: newTopHeight, bottom: newBottomHeight });
+                topHeight = newTopHeight;
+                bottomHeight = newBottomHeight;
+                updateHeights();
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                console.log('Konec tažení za Menu');
+                menuButton.style.cursor = '';
+                updateHeights();
+            }
+        });
+    } else {
+        console.error('Menu tlačítko nenalezeno!');
+    }
+});
+
+// ...rest of existing code...

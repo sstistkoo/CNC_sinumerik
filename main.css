@@ -426,3 +426,58 @@
     .r-params-overlay.visible {
         display: block;
     }
+
+    .editor-button {
+        position: absolute;
+        top: 0;
+        right: 8px;
+        padding: 4px 8px;
+        background-color: #e5e7eb;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #374151;
+        z-index: 10;
+        cursor: pointer;
+        user-select: none; /* Zabránit označení textu při tažení */
+    }
+
+    .editor-button:hover {
+        background-color: #d1d5db;
+    }
+
+    #menuButton {
+        cursor: ns-resize; /* Výchozí kurzor pro Menu tlačítko */
+        user-select: none; /* Zabránit označení textu při tažení */
+        touch-action: none; /* Zlepšit podporu na dotykových zařízeních */
+    }
+
+    #menuButton:hover {
+        background-color: #d1d5db;
+    }
+
+    .editor-handle {
+        height: 6px;
+        background-color: #e5e7eb;
+        cursor: ns-resize;
+        position: relative;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .editor-handle:hover {
+        background-color: #d1d5db;
+    }
+
+    .handle-grip {
+        width: 30px;
+        height: 4px;
+        background-color: #9ca3af;
+        border-radius: 2px;
+    }
+
+    .editor-handle:hover .handle-grip {
+        background-color: #6b7280;
+    }

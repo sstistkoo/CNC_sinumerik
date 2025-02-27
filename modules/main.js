@@ -1,0 +1,1 @@
+// ... kód pro hlavní stránku
