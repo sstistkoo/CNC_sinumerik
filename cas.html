@@ -698,6 +698,70 @@
             align-items: center;
             margin-bottom: 10px;
         }
+
+        /* Přidat nové styly pro maximalizaci diagramu */
+        .diagram-container.maximized {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1000;
+            background: white;
+            padding: 20px;
+            margin: 0;
+            border: none;
+            border-radius: 0;
+        }
+
+        .diagram-container.maximized #diagram {
+            height: calc(100vh - 40px);
+        }
+
+        .maximize-button {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 30px;
+            height: 30px;
+            border: 1px solid #ccc;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #666;
+            z-index: 1001;
+        }
+
+        /* Upravené styly pro posuv */
+        .feed-container {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .feed-mode-button {
+            flex: 0 0 80px;
+            /* Fixní šířka tlačítka */
+            height: 44px;
+            padding: 0 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+
+        .feed-input {
+            flex: 1;
+            /* Zabere zbývající prostor */
+            min-width: 0;
+            /* Zabrání přetečení */
+        }
     </style>
 </head>
 
@@ -917,8 +981,11 @@
                     <button id="speedModeButton" class="speed-mode-button">G96 (konstantní řezná rychlost)</button>
                 </div>
                 <div>
-                    <label>Posuv [mm/ot]</label>
-                    <input type="number" id="feed" value="0.8" step="any" inputmode="decimal">
+                    <label>Posuv:</label>
+                    <div class="feed-container">
+                        <button id="feedModeButton" class="feed-mode-button">mm/ot</button>
+                        <input type="number" id="feed" class="feed-input" value="0.8" step="any" inputmode="decimal">
+                    </div>
                 </div>
             </div>
             <!-- Podmínky pro G96 -->
@@ -959,6 +1026,10 @@
                         <div class="result-label">Průměrné otáčky:</div>
                         <div class="result-value" id="rpm">0 ot/min</div>
                     </div>
+                    <div class="result-item">
+                        <div class="result-label">Rychlost posuvu:</div>
+                        <div class="result-value" id="feedRate">0 mm/min</div>
+                    </div>
                 </div>
                 <div>
                     <div class="result-item">
@@ -975,6 +1046,7 @@
 
         <!-- 8. Vizualizace (původní diagram-container) -->
         <div class="diagram-container">
+            <button class="maximize-button" id="maximizeButton">⛶</button>
             <svg id="diagram" viewBox="-100 -100 200 200"></svg>
             <div class="zoom-controls">
                 <button class="zoom-button" id="zoomIn">+</button>
@@ -1054,7 +1126,14 @@
             }
         }
 
+        // Přesunout deklaraci na začátek skriptu (před všechny funkce)
+        let isG1Mode = false;
+
         function calculateAll() {
+            if (isG1Mode) {
+                document.getElementById('calculateG1Button').click();
+                return;
+            }
             debug('\n--- Začátek nového výpočtu ---');
             try {
                 const isG96 = !document.getElementById('speedModeButton').classList.contains('g97');
@@ -1215,6 +1294,19 @@
                 debug(`Úhly: Start=${(startAngle * 180 / Math.PI).toFixed(1)}°, Konec=${(endAngle * 180 / Math.PI).toFixed(1)}°`);
                 debug(`Délka oblouku: ${totalLength.toFixed(2)} mm`);
 
+                // Přidat výpočet a zobrazení rychlosti posuvu
+                const feedInput = parseFloat(document.getElementById('feed').value);
+                const rpm = getCurrentRPM();
+                let feedRate;
+
+                if (isFeedPerMin) {
+                    feedRate = feedInput;
+                    document.getElementById('feedRate').textContent = `${feedRate.toFixed(1)} mm/min`;
+                } else {
+                    feedRate = feedInput * rpm;
+                    document.getElementById('feedRate').textContent = `${feedInput.toFixed(3)} mm/ot (${feedRate.toFixed(1)} mm/min)`;
+                }
+
             } catch (error) {
                 debug(`Chyba při výpočtu: ${error.message}`);
                 document.getElementById('error-message').textContent = `Chyba při výpočtu: ${error.message}`;
@@ -1244,10 +1336,11 @@
             let maxX = Math.max(...pathPoints.map(p => p.x));
 
             // Přidat trochu prostoru kolem dráhy
-            const paddingZ = (maxZ - minZ) * 0.2;
-            const paddingX = (maxX - minX) * 0.2;
+            const paddingZ = (maxZ - minZ) * 0.3;  // Zvětšit padding
+            const paddingX = (maxX - minX) * 0.3;  // Zvětšit padding
+            const extraBottomPadding = (maxX - minX) * 0.2;  // Extra prostor dole
             const viewBoxWidth = maxZ - minZ + 2 * paddingZ;
-            const viewBoxHeight = maxX - minX + 2 * paddingX;
+            const viewBoxHeight = maxX - minX + 2 * paddingX + extraBottomPadding;
 
             // Nastavit viewBox pro maximální využití prostoru kolem dráhy
             const svgRect = svg.getBoundingClientRect();
@@ -1258,11 +1351,11 @@
             if (viewBoxAspectRatio > aspectRatio) {
                 const newHeight = viewBoxWidth / aspectRatio;
                 const extraPadding = (newHeight - viewBoxHeight) / 2;
-                finalViewBox = `${minZ - paddingZ} ${minX - paddingX - extraPadding} ${viewBoxWidth} ${newHeight}`;
+                finalViewBox = `${minZ - paddingZ} ${minX - paddingX - extraPadding - extraBottomPadding} ${viewBoxWidth} ${newHeight}`;
             } else {
                 const newWidth = viewBoxHeight * aspectRatio;
                 const extraPadding = (newWidth - viewBoxWidth) / 2;
-                finalViewBox = `${minZ - paddingZ - extraPadding} ${minX - paddingX} ${newWidth} ${viewBoxHeight}`;
+                finalViewBox = `${minZ - paddingZ - extraPadding} ${minX - paddingX - extraBottomPadding} ${newWidth} ${viewBoxHeight}`;
             }
             svg.setAttribute('viewBox', finalViewBox);
 
@@ -1372,7 +1465,83 @@
             svg.dataset.originalViewBox = finalViewBox;
         }
 
-        // Upravit funkci calculateCenter, aby používala správný radius
+        // Přidat funkci pro aktualizaci diagramu v G1 módu
+        function updateG1Diagram(points) {
+            const svg = document.getElementById('diagram');
+            svg.innerHTML = '';
+
+            if (points.length < 2) return;
+
+            // Výpočet rozsahu pohledu pro všechny body
+            let minZ = Math.min(...points.map(p => p.z));
+            let maxZ = Math.max(...points.map(p => p.z));
+            let minX = Math.min(...points.map(p => p.x));
+            let maxX = Math.max(...points.map(p => p.x));
+
+            // Zvětšit padding pro lepší zobrazení
+            const paddingZ = (maxZ - minZ) * 0.3;
+            const paddingX = (maxX - minX) * 0.3;
+
+            // Přidat extra prostor nad a pod diagramem
+            const totalHeight = maxX - minX + 2 * paddingX;
+            const extraTopPadding = totalHeight * 0.2;    // 20% výšky navíc nahoře
+            const extraBottomPadding = totalHeight * 0.5; // 50% výšky navíc dole
+
+            // Rozšířit viewBox
+            const viewBoxWidth = (maxZ - minZ) + 2 * paddingZ;
+            const viewBoxHeight = totalHeight + extraTopPadding + extraBottomPadding;
+
+            // Upravit pozici viewBoxu - posunout diagram níže
+            const viewBoxZ = minZ - paddingZ;
+            const viewBoxX = minX - paddingX - extraTopPadding;
+
+            const finalViewBox = `${viewBoxZ} ${viewBoxX} ${viewBoxWidth} ${viewBoxHeight}`;
+
+            svg.setAttribute('viewBox', finalViewBox);
+            svg.dataset.originalViewBox = finalViewBox;
+
+            // Vykreslit dráhu s fixní tloušťkou čáry
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            let pathData = `M ${points[0].z} ${-points[0].x}`;
+            points.slice(1).forEach(point => {
+                pathData += ` L ${point.z} ${-point.x}`;
+            });
+
+            path.setAttribute("d", pathData);
+            path.setAttribute("stroke", "#2196f3");
+            path.setAttribute("fill", "none");
+            path.setAttribute("stroke-width", viewBoxWidth / 100);
+            svg.appendChild(path);
+
+            // Vykreslit body s fixní velikostí
+            points.forEach((point, index) => {
+                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                circle.setAttribute("cx", point.z);
+                circle.setAttribute("cy", -point.x);
+                circle.setAttribute("r", viewBoxWidth / 150);
+                circle.setAttribute("fill", "#2196f3");
+                svg.appendChild(circle);
+
+                // Popisky bodů s fixní velikostí
+                const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                text.setAttribute("x", point.z + viewBoxWidth / 40);
+                text.setAttribute("y", -point.x - viewBoxHeight / 40);
+                text.setAttribute("font-size", viewBoxWidth / 35);
+                text.setAttribute("fill", "#333");
+                text.innerHTML = `P${index + 1}
+                    <tspan x="${point.z + viewBoxWidth / 40}"
+                           dy="1.2em"
+                           font-size="${viewBoxWidth / 45}"
+                           fill="#666">
+                        (${(-point.x).toFixed(1)}, ${point.z.toFixed(1)})
+                    </tspan>`;
+                svg.appendChild(text);
+            });
+
+            debug('G1 diagram aktualizován');
+        }
+
+        // Upravit calculateCenter, aby používala správný radius
         function calculateCenter(forceRecalc = false) {
             const radiusType = document.getElementById('radiusType').value;
             const startX = parseFloat(document.getElementById('startX').value);
@@ -1970,6 +2139,16 @@
         })();
 
         function validateArc(params) {
+            // Nejdříve zkontrolovat G1 mód
+            if (document.getElementById('g1PointsContainer').style.display === 'block') {
+                return true; // V G1 módu přeskočit validaci oblouku
+            }
+
+            // Přidat kontrolu G1 módu
+            if (isG1Mode) {
+                return true;
+            }
+
             const radiusType = document.getElementById('radiusType').value;
 
             // Přidáme vyjímku i pro IK mód
@@ -2519,12 +2698,12 @@
                     cncCode += `N20 ${direction} X${endX} Z${endZ} I${i} K${k}`;
                     break;
                 case 'CT':
-                    cncCode += `N20 ${direction} X${endX} Z${endZ} CT`;
+                    cncCode += `N20 ${direction} X${endX} Z=${endZ} CT`;
                     break;
                 case 'CIP':
                     const throughX = document.getElementById('throughX').value;
                     const throughZ = document.getElementById('throughZ').value;
-                    cncCode += `N20 ${direction} X${endX} Z${endZ} CIP=(${throughX},${throughZ})`;
+                    cncCode += `N20 ${direction} X${endX} Z=${endZ} CIP=(${throughX},${throughZ})`;
                     break;
             }
 
@@ -2551,7 +2730,6 @@
         const g1ModeButton = document.getElementById('g1ModeButton');
         const centerGroup = document.querySelector('.center-group');
         const g1PointsContainer = document.getElementById('g1PointsContainer');
-        let isG1Mode = false;
 
         g1ModeButton.addEventListener('click', () => {
             isG1Mode = !isG1Mode;
@@ -2564,6 +2742,24 @@
             const lengthLabel = document.getElementById('lengthLabel');
             lengthLabel.textContent = isG1Mode ? 'Délka dráhy:' : 'Délka oblouku:';
 
+            if (isG1Mode) {
+                // Načíst počáteční body z předchozích hodnot
+                const startPoint = {
+                    x: parseFloat(document.getElementById('startX').value),
+                    z: parseFloat(document.getElementById('startZ').value)
+                };
+                const endPoint = {
+                    x: parseFloat(document.getElementById('endX').value),
+                    z: parseFloat(document.getElementById('endZ').value)
+                };
+
+                // Aktualizovat vizualizaci s počátečními body
+                updateG1Diagram([startPoint, endPoint]);
+            } else {
+                // Vrátit se k původní vizualizaci
+                calculateAll();
+            }
+
             // Přepnout názvy a tlačítka
             const startTitle = document.getElementById('startTitle');
             const endTitle = document.getElementById('endTitle');
@@ -2573,6 +2769,12 @@
                 startTitle.textContent = "Bod 1:";
                 endTitle.textContent = "Bod 2:";
                 removeButtons.forEach(btn => btn.style.display = 'block');
+
+                // Odstranit existující G1 body
+                const g1Points = document.querySelectorAll('.g1-point');
+                g1Points.forEach(point => point.remove());
+
+                // Již nepřidáváme automaticky bod 3
             } else {
                 startTitle.textContent = "Začátek radiusu:";
                 endTitle.textContent = "Konec radiusu:";
@@ -2602,7 +2804,6 @@
                 </div>
             `;
 
-            // Přidat handler pro odebrání bodu
             const removeButton = newPoint.querySelector('.remove-point-button');
             removeButton.addEventListener('click', () => {
                 newPoint.remove();
@@ -2635,6 +2836,9 @@
         });
 
         document.getElementById('calculateG1Button').addEventListener('click', () => {
+            // Přidat vyčištění chybové zprávy
+            document.getElementById('error-message').textContent = '';
+
             // Získat všechny body včetně prvních dvou ze základních vstupů
             const startPoint = {
                 x: parseFloat(document.getElementById('startX').value),
@@ -2662,15 +2866,7 @@
                 return;
             }
 
-            // Zbytek funkce zůstává stejný
-            let totalLength = 0;
-            for (let i = 1; i < points.length; i++) {
-                const dx = points[i].x - points[i-1].x;
-                const dz = points[i].z - points[i-1].z;
-                totalLength += Math.sqrt(dx*dx + dz*dz);
-            }
-
-            // Vypočítat celkovou délku dráhy
+            // Výpočet celkové délky dráhy
             let totalLength = 0;
             for (let i = 1; i < points.length; i++) {
                 const dx = points[i].x - points[i-1].x;
@@ -2679,11 +2875,11 @@
             }
 
             // Výpočet technologických parametrů
-            const feed = parseFloat(document.getElementById('feed').value);
-            const isG96 = !document.getElementById('speedModeButton').classList.contains('g97');
+            const feedValue = parseFloat(document.getElementById('feed').value);
+            const isG96Mode = !document.getElementById('speedModeButton').classList.contains('g97');
             let totalTime = 0;
 
-            if (isG96) {
+            if (isG96Mode) {
                 const cuttingSpeed = parseFloat(document.getElementById('cuttingSpeed').value);
                 const speedLimit = parseFloat(document.getElementById('speedLimit').value);
 
@@ -2706,11 +2902,11 @@
                     const segmentLength = Math.sqrt(dx*dx + dz*dz);
 
                     // Čas pro tento úsek
-                    totalTime += segmentLength / (rpm * feed);
+                    totalTime += segmentLength / (rpm * feedValue);
                 }
             } else {
                 const constantSpeed = parseFloat(document.getElementById('constantSpeed').value);
-                totalTime = totalLength / (constantSpeed * feed);
+                totalTime = totalLength / (constantSpeed * feedValue);
             }
 
             // Výpočet efektivního průměru
@@ -2721,50 +2917,524 @@
             document.getElementById('machiningTime').textContent = formatTime(totalTime * 60);
             document.getElementById('effectiveDiameter').textContent = `${effectiveDiameter.toFixed(2)} mm`;
 
+            // Najít největší a nejmenší průměr
+            const diameters = points.map(p => Math.abs(p.x) * 2);
+            const maxDiameter = Math.max(...diameters);
+            const minDiameter = Math.min(...diameters);
+
             // Výpočet průměrných otáček
-            if (isG96) {
+            if (isG96Mode) {
                 const cuttingSpeed = parseFloat(document.getElementById('cuttingSpeed').value);
                 const speedLimit = parseFloat(document.getElementById('speedLimit').value);
-                const avgRPM = Math.min((cuttingSpeed * 1000) / (Math.PI * effectiveDiameter), speedLimit);
-                document.getElementById('rpm').textContent = `${Math.round(avgRPM)} ot/min`;
+
+                // Výpočet teoretických otáček (bez limitu)
+                const theoreticalRpmMin = Math.round((cuttingSpeed * 1000) / (Math.PI * maxDiameter));
+                const theoreticalRpmMax = Math.round((cuttingSpeed * 1000) / (Math.PI * minDiameter));
+                const theoreticalRpmAvg = Math.round((cuttingSpeed * 1000) / (Math.PI * effectiveDiameter));
+
+                // Výpočet skutečných otáček (s limitem)
+                const actualRpmMin = Math.min(theoreticalRpmMin, speedLimit);
+                const actualRpmMax = Math.min(theoreticalRpmMax, speedLimit);
+                const actualRpmAvg = Math.min(theoreticalRpmAvg, speedLimit);
+
+                document.getElementById('rpm').innerHTML = `
+                    ${actualRpmAvg} ot/min (${theoreticalRpmAvg})
+                    <div style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                        Otáčky na Ø${maxDiameter.toFixed(1)}mm: ${actualRpmMin} ot/min (${theoreticalRpmMin})<br>
+                        Otáčky na Ø${minDiameter.toFixed(1)}mm: ${actualRpmMax} ot/min (${theoreticalRpmMax})
+                    </div>`;
             } else {
                 const constantSpeed = parseFloat(document.getElementById('constantSpeed').value);
-                document.getElementById('rpm').textContent = `${Math.round(constantSpeed)} ot/min`;
+                document.getElementById('rpm').innerHTML = `
+                    ${Math.round(constantSpeed)} ot/min
+                    <div style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                        Konstantní otáčky (G97)
+                    </div>`;
             }
 
             // Vykreslit dráhu v diagramu
+            updateG1Diagram(points);
+
+            // Výpočet a zobrazení rychlosti posuvu pro G1
+            let feedRate;
+            if (isG96Mode) {
+                const rpm = parseFloat(document.getElementById('rpm').textContent);
+                if (isFeedPerMin) {
+                    feedRate = feedValue;
+                    document.getElementById('feedRate').textContent = `${feedRate.toFixed(1)} mm/min`;
+                } else {
+                    feedRate = feedValue * rpm;
+                    document.getElementById('feedRate').textContent = `${feedValue.toFixed(3)} mm/ot (${feedRate.toFixed(1)} mm/min)`;
+                }
+            } else {
+                const constantSpeed = parseFloat(document.getElementById('constantSpeed').value);
+                if (isFeedPerMin) {
+                    feedRate = feedValue;
+                    document.getElementById('feedRate').textContent = `${feedRate.toFixed(1)} mm/min`;
+                } else {
+                    feedRate = feedValue * constantSpeed;
+                    document.getElementById('feedRate').textContent = `${feedValue.toFixed(3)} mm/ot (${feedRate.toFixed(1)} mm/min)`;
+                }
+            }
+        });
+
+        document.getElementById('calculateG1Button').addEventListener('click', () => {
+            // Přidat vyčištění chybové zprávy
+            document.getElementById('error-message').textContent = '';
+
+            // Získat všechny body včetně prvních dvou ze základních vstupů
+            const startPoint = {
+                x: parseFloat(document.getElementById('startX').value),
+                z: parseFloat(document.getElementById('startZ').value)
+            };
+
+            const endPoint = {
+                x: parseFloat(document.getElementById('endX').value),
+                z: parseFloat(document.getElementById('endZ').value)
+            };
+
+            // Získat dodatečné body z G1 módu
+            const additionalPoints = Array.from(document.querySelectorAll('.g1-point')).map(point => ({
+                x: parseFloat(point.querySelector('.g1-x').value),
+                z: parseFloat(point.querySelector('.g1-z').value)
+            }));
+
+            // Spojit všechny body dohromady
+            const points = [startPoint, endPoint, ...additionalPoints].filter(point =>
+                !isNaN(point.x) && !isNaN(point.z)
+            );
+
+            if (points.length < 2) {
+                document.getElementById('error-message').textContent = 'Potřeba alespoň 2 platné body';
+                return;
+            }
+
+            // Výpočet celkové délky dráhy
+            let totalLength = 0;
+            for (let i = 1; i < points.length; i++) {
+                const dx = points[i].x - points[i-1].x;
+                const dz = points[i].z - points[i-1].z;
+                totalLength += Math.sqrt(dx*dx + dz*dz);
+            }
+
+            // Výpočet technologických parametrů
+            const feedValue = parseFloat(document.getElementById('feed').value);
+            const isG96Mode = !document.getElementById('speedModeButton').classList.contains('g97');
+            let totalTime = 0;
+
+            if (isG96Mode) {
+                const cuttingSpeed = parseFloat(document.getElementById('cuttingSpeed').value);
+                const speedLimit = parseFloat(document.getElementById('speedLimit').value);
+
+                // Výpočet pro každý úsek dráhy
+                for (let i = 1; i < points.length; i++) {
+                    const currentX = points[i].x;
+                    const currentDiameter = Math.abs(currentX) * 2;
+                    const prevX = points[i-1].x;
+                    const prevDiameter = Math.abs(prevX) * 2;
+
+                    // Průměrný průměr pro daný úsek
+                    const avgDiameter = (currentDiameter + prevDiameter) / 2;
+
+                    // Výpočet aktuálních otáček s limitem
+                    const rpm = Math.min((cuttingSpeed * 1000) / (Math.PI * avgDiameter), speedLimit);
+
+                    // Délka aktuálního úseku
+                    const dx = points[i].x - points[i-1].x;
+                    const dz = points[i].z - points[i-1].z;
+                    const segmentLength = Math.sqrt(dx*dx + dz*dz);
+
+                    // Čas pro tento úsek
+                    totalTime += segmentLength / (rpm * feedValue);
+                }
+            } else {
+                const constantSpeed = parseFloat(document.getElementById('constantSpeed').value);
+                totalTime = totalLength / (constantSpeed * feedValue);
+            }
+
+            // Výpočet efektivního průměru
+            const effectiveDiameter = points.reduce((sum, point) => sum + Math.abs(point.x), 0) * 2 / points.length;
+
+            // Aktualizace všech výsledků
+            document.getElementById('arcLength').textContent = `${totalLength.toFixed(2)} mm`;
+            document.getElementById('machiningTime').textContent = formatTime(totalTime * 60);
+            document.getElementById('effectiveDiameter').textContent = `${effectiveDiameter.toFixed(2)} mm`;
+
+            // Najít největší a nejmenší průměr
+            const diameters = points.map(p => Math.abs(p.x) * 2);
+            const maxDiameter = Math.max(...diameters);
+            const minDiameter = Math.min(...diameters);
+
+            // Výpočet průměrných otáček
+            if (isG96Mode) {
+                const cuttingSpeed = parseFloat(document.getElementById('cuttingSpeed').value);
+                const speedLimit = parseFloat(document.getElementById('speedLimit').value);
+
+                // Výpočet teoretických otáček pro každý segment dráhy
+                let segmentRpms = [];
+                for (let i = 1; i < points.length; i++) {
+                    const segmentStart = points[i-1];
+                    const segmentEnd = points[i];
+
+                    // Výpočet průměrů na začátku a konci segmentu
+                    const startDiameter = Math.abs(segmentStart.x) * 2;
+                    const endDiameter = Math.abs(segmentEnd.x) * 2;
+
+                    // Výpočet teoretických otáček pro začátek a konec segmentu
+                    const startRpm = (cuttingSpeed * 1000) / (Math.PI * startDiameter);
+                    const endRpm = (cuttingSpeed * 1000) / (Math.PI * endDiameter);
+
+                    // Uložit informace o segmentu
+                    segmentRpms.push({
+                        startDiameter,
+                        endDiameter,
+                        startRpm: Math.min(startRpm, speedLimit),
+                        endRpm: Math.min(endRpm, speedLimit),
+                        theoreticalStartRpm: Math.round(startRpm),
+                        theoreticalEndRpm: Math.round(endRpm)
+                    });
+                }
+
+                // Najít globální maxima a minima
+                let maxRealRpm = Math.max(...segmentRpms.flatMap(s => [s.startRpm, s.endRpm]));
+                let minRealRpm = Math.min(...segmentRpms.flatMap(s => [s.startRpm, s.endRpm]));
+                let maxTheorRpm = Math.max(...segmentRpms.flatMap(s => [s.theoreticalStartRpm, s.theoreticalEndRpm]));
+                let minTheorRpm = Math.min(...segmentRpms.flatMap(s => [s.theoreticalStartRpm, s.theoreticalEndRpm]));
+
+                // Najít průměry pro maximální a minimální otáčky
+                const maxRpmDiameter = Math.min(...diameters);
+                const minRpmDiameter = Math.max(...diameters);
+
+                // Aktualizace zobrazení otáček
+                document.getElementById('rpm').innerHTML = `
+                    ${Math.round((maxRealRpm + minRealRpm) / 2)} ot/min (${Math.round((maxTheorRpm + minTheorRpm) / 2)})
+                    <div style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                        Otáčky na Ø${minRpmDiameter.toFixed(1)}mm: ${Math.round(minRealRpm)} ot/min (${Math.round(minTheorRpm)})<br>
+                        Otáčky na Ø${maxRpmDiameter.toFixed(1)}mm: ${Math.round(maxRealRpm)} ot/min (${Math.round(maxTheorRpm)})
+                    </div>`;
+
+                // Pro debugging
+                debug('\nVýpočet otáček pro G1 dráhu:');
+                segmentRpms.forEach((segment, i) => {
+                    debug(`Segment ${i + 1}:`);
+                    debug(`  Start Ø${segment.startDiameter.toFixed(1)}mm: ${Math.round(segment.startRpm)} ot/min (${segment.theoreticalStartRpm})`);
+                    debug(`  End Ø${segment.endDiameter.toFixed(1)}mm: ${Math.round(segment.endRpm)} ot/min (${segment.theoreticalEndRpm})`);
+                });
+            } else {
+                // Pro G97 zůstává stejné
+                const constantSpeed = parseFloat(document.getElementById('constantSpeed').value);
+                document.getElementById('rpm').innerHTML = `
+                    ${Math.round(constantSpeed)} ot/min
+                    <div style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                        Konstantní otáčky (G97)
+                    </div>`;
+            }
+
+            // Vykreslit dráhu v diagramu
+            updateG1Diagram(points);
+        });
+
+        // Přidat automatickou aktualizaci vizualizace při změně hodnot v G1 módu
+        document.addEventListener('input', (e) => {
+            if (isG1Mode && (e.target.classList.contains('g1-x') || e.target.classList.contains('g1-z') ||
+                e.target.id === 'startX' || e.target.id === 'startZ' ||
+                e.target.id === 'endX' || e.target.id === 'endZ')) {
+
+                // Získat všechny aktuální body
+                const points = [
+                    {
+                        x: parseFloat(document.getElementById('startX').value),
+                        z: parseFloat(document.getElementById('startZ').value)
+                    },
+                    {
+                        x: parseFloat(document.getElementById('endX').value),
+                        z: parseFloat(document.getElementById('endZ').value)
+                    },
+                    ...Array.from(document.querySelectorAll('.g1-point')).map(point => ({
+                        x: parseFloat(point.querySelector('.g1-x').value),
+                        z: parseFloat(point.querySelector('.g1-z').value)
+                    }))
+                ].filter(point => !isNaN(point.x) && !isNaN(point.z));
+
+                // Aktualizovat vizualizaci
+                updateG1Diagram(points);
+            }
+        });
+
+        // Přidat globální proměnnou pro sledování módu posuvu
+        let isFeedPerMin = false;
+
+        // Přidat handler pro přepínání módu posuvu
+        document.getElementById('feedModeButton').addEventListener('click', function() {
+            isFeedPerMin = !isFeedPerMin;
+            const feedInput = document.getElementById('feed');
+            const currentValue = parseFloat(feedInput.value);
+            const rpm = getCurrentRPM();
+
+            if (isFeedPerMin) {
+                this.textContent = 'mm/min';
+                // Převést mm/ot na mm/min
+                if (!isNaN(currentValue) && rpm > 0) {
+                    feedInput.value = (currentValue * rpm).toFixed(1);
+                }
+            } else {
+                this.textContent = 'mm/ot';
+                // Převést mm/min na mm/ot
+                if (!isNaN(currentValue) && rpm > 0) {
+                    feedInput.value = (currentValue / rpm).toFixed(3);
+                }
+            }
+            calculateAll();
+        });
+
+        // Přidat handler pro maximalizaci diagramu
+        document.getElementById('maximizeButton').addEventListener('click', function() {
+            const container = document.querySelector('.diagram-container');
+            const svg = document.getElementById('diagram');
+            container.classList.toggle('maximized');
+            this.textContent = container.classList.contains('maximized') ? '⛶' : '⛶';
+
+            if (svg.dataset.originalViewBox) {
+                const [x, y, width, height] = svg.dataset.originalViewBox.split(' ').map(Number);
+                const viewBox = { x, y, width, height };
+                setViewBox(svg, viewBox);
+            }
+        });
+
+        // Přidat novou pomocnou funkci pro získání aktuálních otáček
+        function getCurrentRPM() {
+            const rpmText = document.getElementById('rpm').textContent;
+            const match = rpmText.match(/(\d+)\s+ot\/min/);
+            return match ? parseFloat(match[1]) : 0;
+        }
+
+        // Přidat definici funkce setViewBox pro manipulaci s viewBoxem
+        function setViewBox(svg, viewBox) {
+            if (svg && viewBox) {
+                svg.setAttribute('viewBox',
+                    `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`);
+            }
+        }
+
+        // Upravit funkci calculateG1Button pro správný výpočet a zobrazení posuvu
+        document.getElementById('calculateG1Button').addEventListener('click', () => {
+            // Přidat vyčištění chybové zprávy
+            document.getElementById('error-message').textContent = '';
+
+            // Získat všechny body včetně prvních dvou ze základních vstupů
+            const startPoint = {
+                x: parseFloat(document.getElementById('startX').value),
+                z: parseFloat(document.getElementById('startZ').value)
+            };
+
+            const endPoint = {
+                x: parseFloat(document.getElementById('endX').value),
+                z: parseFloat(document.getElementById('endZ').value)
+            };
+
+            // Získat dodatečné body z G1 módu
+            const additionalPoints = Array.from(document.querySelectorAll('.g1-point')).map(point => ({
+                x: parseFloat(point.querySelector('.g1-x').value),
+                z: parseFloat(point.querySelector('.g1-z').value)
+            }));
+
+            // Spojit všechny body dohromady
+            const points = [startPoint, endPoint, ...additionalPoints].filter(point =>
+                !isNaN(point.x) && !isNaN(point.z)
+            );
+
+            if (points.length < 2) {
+                document.getElementById('error-message').textContent = 'Potřeba alespoň 2 platné body';
+                return;
+            }
+
+            // Výpočet celkové délky dráhy
+            let totalLength = 0;
+            for (let i = 1; i < points.length; i++) {
+                const dx = points[i].x - points[i-1].x;
+                const dz = points[i].z - points[i-1].z;
+                totalLength += Math.sqrt(dx*dx + dz*dz);
+            }
+
+            // Výpočet technologických parametrů
+            const feedValue = parseFloat(document.getElementById('feed').value);
+            const isG96Mode = !document.getElementById('speedModeButton').classList.contains('g97');
+            let totalTime = 0;
+
+            if (isG96Mode) {
+                const cuttingSpeed = parseFloat(document.getElementById('cuttingSpeed').value);
+                const speedLimit = parseFloat(document.getElementById('speedLimit').value);
+
+                // Výpočet pro každý úsek dráhy
+                for (let i = 1; i < points.length; i++) {
+                    const currentX = points[i].x;
+                    const currentDiameter = Math.abs(currentX) * 2;
+                    const prevX = points[i-1].x;
+                    const prevDiameter = Math.abs(prevX) * 2;
+
+                    // Průměrný průměr pro daný úsek
+                    const avgDiameter = (currentDiameter + prevDiameter) / 2;
+
+                    // Výpočet aktuálních otáček s limitem
+                    const rpm = Math.min((cuttingSpeed * 1000) / (Math.PI * avgDiameter), speedLimit);
+
+                    // Délka aktuálního úseku
+                    const dx = points[i].x - points[i-1].x;
+                    const dz = points[i].z - points[i-1].z;
+                    const segmentLength = Math.sqrt(dx*dx + dz*dz);
+
+                    // Čas pro tento úsek
+                    totalTime += segmentLength / (rpm * feedValue);
+                }
+            } else {
+                const constantSpeed = parseFloat(document.getElementById('constantSpeed').value);
+                totalTime = totalLength / (constantSpeed * feedValue);
+            }
+
+            // Výpočet efektivního průměru
+            const effectiveDiameter = points.reduce((sum, point) => sum + Math.abs(point.x), 0) * 2 / points.length;
+
+            // Aktualizace všech výsledků
+            document.getElementById('arcLength').textContent = `${totalLength.toFixed(2)} mm`;
+            document.getElementById('machiningTime').textContent = formatTime(totalTime * 60);
+            document.getElementById('effectiveDiameter').textContent = `${effectiveDiameter.toFixed(2)} mm`;
+
+            // Najít největší a nejmenší průměr
+            const diameters = points.map(p => Math.abs(p.x) * 2);
+            const maxDiameter = Math.max(...diameters);
+            const minDiameter = Math.min(...diameters);
+
+            // Výpočet průměrných otáček
+            if (isG96Mode) {
+                const cuttingSpeed = parseFloat(document.getElementById('cuttingSpeed').value);
+                const speedLimit = parseFloat(document.getElementById('speedLimit').value);
+
+                // Výpočet teoretických otáček (bez limitu)
+                const theoreticalRpmMin = Math.round((cuttingSpeed * 1000) / (Math.PI * maxDiameter));
+                const theoreticalRpmMax = Math.round((cuttingSpeed * 1000) / (Math.PI * minDiameter));
+                const theoreticalRpmAvg = Math.round((cuttingSpeed * 1000) / (Math.PI * effectiveDiameter));
+
+                // Výpočet skutečných otáček (s limitem)
+                const actualRpmMin = Math.min(theoreticalRpmMin, speedLimit);
+                const actualRpmMax = Math.min(theoreticalRpmMax, speedLimit);
+                const actualRpmAvg = Math.min(theoreticalRpmAvg, speedLimit);
+
+                document.getElementById('rpm').innerHTML = `
+                    ${actualRpmAvg} ot/min (${theoreticalRpmAvg})
+                    <div style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                        Otáčky na Ø${maxDiameter.toFixed(1)}mm: ${actualRpmMin} ot/min (${theoreticalRpmMin})<br>
+                        Otáčky na Ø${minDiameter.toFixed(1)}mm: ${actualRpmMax} ot/min (${theoreticalRpmMax})
+                    </div>`;
+            } else {
+                const constantSpeed = parseFloat(document.getElementById('constantSpeed').value);
+                document.getElementById('rpm').innerHTML = `
+                    ${Math.round(constantSpeed)} ot/min
+                    <div style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                        Konstantní otáčky (G97)
+                    </div>`;
+            }
+
+            // Vykreslit dráhu v diagramu
+            updateG1Diagram(points);
+
+            // Výpočet a zobrazení rychlosti posuvu pro G1
+            let feedRate;
+            if (isG96Mode) {
+                const rpm = parseFloat(document.getElementById('rpm').textContent);
+                if (isFeedPerMin) {
+                    feedRate = feedValue;
+                    document.getElementById('feedRate').textContent = `${feedRate.toFixed(1)} mm/min`;
+                } else {
+                    feedRate = feedValue * rpm;
+                    document.getElementById('feedRate').textContent = `${feedValue.toFixed(3)} mm/ot (${feedRate.toFixed(1)} mm/min)`;
+                }
+            } else {
+                const constantSpeed = parseFloat(document.getElementById('constantSpeed').value);
+                if (isFeedPerMin) {
+                    feedRate = feedValue;
+                    document.getElementById('feedRate').textContent = `${feedRate.toFixed(1)} mm/min`;
+                } else {
+                    feedRate = feedValue * constantSpeed;
+                    document.getElementById('feedRate').textContent = `${feedValue.toFixed(3)} mm/ot (${feedRate.toFixed(1)} mm/min)`;
+                }
+            }
+        });
+
+        // Upravit funkci updateG1Diagram pro správné centrování dráhy
+        function updateG1Diagram(points) {
             const svg = document.getElementById('diagram');
             svg.innerHTML = '';
 
+            if (points.length < 2) return;
+
+            // Výpočet rozsahu pohledu pro všechny body
+            let minZ = Math.min(...points.map(p => p.z));
+            let maxZ = Math.max(...points.map(p => p.z));
+            let minX = Math.min(...points.map(p => p.x));
+            let maxX = Math.max(...points.map(p => p.x));
+
+            // Zvětšit padding pro lepší zobrazení
+            const paddingZ = (maxZ - minZ) * 0.3;
+            const paddingX = (maxX - minX) * 0.3;
+
+            // Přidat extra prostor nad a pod diagramem
+            const totalHeight = maxX - minX + 2 * paddingX;
+            const extraTopPadding = totalHeight * 0.2;    // 20% výšky navíc nahoře
+            const extraBottomPadding = totalHeight * 0.5; // 50% výšky navíc dole
+
+            // Rozšířit viewBox
+            const viewBoxWidth = (maxZ - minZ) + 2 * paddingZ;
+            const viewBoxHeight = totalHeight + extraTopPadding + extraBottomPadding;
+
+            // Upravit pozici viewBoxu - posunout diagram níže
+            const viewBoxZ = minZ - paddingZ;
+            const viewBoxX = minX - paddingX - extraTopPadding;
+
+            const finalViewBox = `${viewBoxZ} ${viewBoxX} ${viewBoxWidth} ${viewBoxHeight}`;
+
+            svg.setAttribute('viewBox', finalViewBox);
+            svg.dataset.originalViewBox = finalViewBox;
+
+            // Vykreslit dráhu s fixní tloušťkou čáry
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
             let pathData = `M ${points[0].z} ${-points[0].x}`;
             points.slice(1).forEach(point => {
                 pathData += ` L ${point.z} ${-point.x}`;
             });
 
-            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
             path.setAttribute("d", pathData);
             path.setAttribute("stroke", "#2196f3");
             path.setAttribute("fill", "none");
-            path.setAttribute("stroke-width", "2");
+            path.setAttribute("stroke-width", viewBoxWidth / 100);
             svg.appendChild(path);
 
-            // Vykreslit body
+            // Vykreslit body s fixní velikostí
             points.forEach((point, index) => {
                 const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
                 circle.setAttribute("cx", point.z);
                 circle.setAttribute("cy", -point.x);
-                circle.setAttribute("r", "3");
+                circle.setAttribute("r", viewBoxWidth / 150);
                 circle.setAttribute("fill", "#2196f3");
                 svg.appendChild(circle);
 
+                // Popisky bodů s fixní velikostí
                 const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-                text.setAttribute("x", point.z + 5);
-                text.setAttribute("y", -point.x - 5);
-                text.textContent = `P${index}`;
+                text.setAttribute("x", point.z + viewBoxWidth / 40);
+                text.setAttribute("y", -point.x - viewBoxHeight / 40);
+                text.setAttribute("font-size", viewBoxWidth / 35);
+                text.setAttribute("fill", "#333");
+                text.innerHTML = `P${index + 1}
+                    <tspan x="${point.z + viewBoxWidth / 40}"
+                           dy="1.2em"
+                           font-size="${viewBoxWidth / 45}"
+                           fill="#666">
+                        (${(-point.x).toFixed(1)}, ${point.z.toFixed(1)})
+                    </tspan>`;
                 svg.appendChild(text);
             });
-        });
 
+            debug('G1 diagram aktualizován');
+        }
     </script>
 </body>
 </html>
