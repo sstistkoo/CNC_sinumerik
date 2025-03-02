@@ -5,6 +5,15 @@ export default {
             usePolling: true
         }
     },
-    base: './',  // Důležité pro relativní cesty
-    assetsInclude: ['**/*.json']
+    base: './',
+    assetsInclude: ['**/*.json'],
+    resolve: {
+        alias: {
+            '@': '/src',
+            '@components': '/src/components',
+            '@styles': '/src/styles',
+            '@js': '/src/js',
+            '@data': '/data'
+        }
+    }
 }

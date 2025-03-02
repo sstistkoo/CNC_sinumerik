@@ -1,5 +1,5 @@
-import { CNCParser } from './cncParser.js';
-import { RParameters } from './RParameters.js';  // Přidat import
+import { CNCParser } from './js/cncParser.js';
+import { RParameters } from './js/RParameters.js';  // Přidat import
 
 // Přidat na začátek souboru, před vytvoření CNCParser
 const rParameters = new RParameters();
