@@ -15,6 +15,33 @@ Webová aplikace pro editaci a simulaci CNC Sinumerik programů.
 
 Otevřete `editor_cnc.html` v moderním webovém prohlížeči. Použijte výběr souborů pro načtení CNC programů.
 
+## Instalace a spuštění
+
+```bash
+# Nainstalovat závislosti
+npm install
+
+# Spustit vývojový server
+npm run dev
+
+# nebo vytvořit produkční build
+npm run build
+```
+
+Pro lokální vývoj navštivte `http://localhost:5173`
+
+## Řešení problémů
+
+1. Pokud se stránka nenačítá:
+
+   - Vyčistěte cache prohlížeče
+   - Zkontrolujte konzoli prohlížeče pro chyby
+   - Ujistěte se, že běží npm run dev
+
+2. Pokud nejsou načteny styly/skripty:
+   - Zkontrolujte cesty v index.html
+   - Ujistěte se, že všechny soubory existují ve správných složkách
+
 ## Aktuální stav
 
 - Editor: Základní funkce implementovány

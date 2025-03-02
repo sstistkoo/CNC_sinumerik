@@ -1,4 +1,7 @@
-export default {
+import { defineConfig } from 'vite';
+import { resolve } from 'path';
+
+export default defineConfig({
     server: {
         port: 5173,
         watch: {
@@ -6,14 +9,21 @@ export default {
         }
     },
     base: './',
+    build: {
+        rollupOptions: {
+            input: {
+                main: resolve(__dirname, 'index.html')
+            }
+        }
+    },
     assetsInclude: ['**/*.json'],
     resolve: {
         alias: {
-            '@': '/src',
-            '@components': '/src/components',
-            '@styles': '/src/styles',
-            '@js': '/src/js',
-            '@data': '/data'
+            '@': resolve(__dirname, './src'),
+            '@components': resolve(__dirname, './src/components'),
+            '@styles': resolve(__dirname, './src/styles'),
+            '@js': resolve(__dirname, './src/js'),
+            '@data': resolve(__dirname, './data')
         }
     }
-}
+});
