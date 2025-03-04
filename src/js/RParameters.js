@@ -68,12 +68,15 @@ export class RParameters {
     }
 
     set(num, value) {
+        console.log(`Nastavuji R${num} =`, value);
         this.params.set(num, value);
         this.history.push({ num, value, time: Date.now() });
     }
 
     get(num) {
-        return this.params.get(num) ?? 0;
+        const value = this.params.get(num) ?? 0;
+        console.log(`Čtu hodnotu R${num} =`, value);
+        return value;
     }
 
     getAll() {
